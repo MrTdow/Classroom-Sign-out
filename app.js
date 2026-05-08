@@ -1480,7 +1480,7 @@ els.noteDialog.addEventListener("close", () => {
   pendingAction = null;
 });
 els.pinDialog.querySelector("form").addEventListener("submit", (event) => {
-  if (event.submitter?.value === "confirm") {
+  if (!event.submitter || event.submitter.value === "confirm") {
     event.preventDefault();
     confirmStudentPin();
     return;
@@ -1492,7 +1492,7 @@ els.pinInput.addEventListener("input", () => {
   els.pinError.textContent = "";
 });
 els.maxOutDialog.querySelector("form").addEventListener("submit", (event) => {
-  if (event.submitter?.value === "approve") {
+  if (!event.submitter || event.submitter.value === "approve") {
     event.preventDefault();
     continueAfterMaxOutApproval();
     return;
@@ -1503,7 +1503,7 @@ els.maxOutPasswordInput.addEventListener("input", () => {
   els.maxOutPasswordError.textContent = "";
 });
 els.teacherPasswordDialog.querySelector("form").addEventListener("submit", (event) => {
-  if (event.submitter?.value === "confirm") {
+  if (!event.submitter || event.submitter.value === "confirm") {
     event.preventDefault();
     unlockTeacherView();
     return;
