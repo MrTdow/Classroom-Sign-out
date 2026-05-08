@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Classroom Sign-Out Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Classroom Tracker</p>
+        <h1>Sign-Out, Sign-In, and Tardy Log</h1>
+      </div>
+      <div class="header-actions">
+        <button class="secondary" id="backupBtn" type="button">Export Backup</button>
+        <label class="secondary file-button" for="restoreFile">Import Backup</label>
+        <input id="restoreFile" type="file" accept="application/json">
+      </div>
+    </header>
+
+    <nav class="top-tabs" aria-label="Main views">
+      <button class="tab active" data-view="student" type="button">Student Station</button>
+      <button class="tab" data-view="teacher" type="button">Teacher Dashboard</button>
+      <button class="tab" data-view="setup" type="button">Setup</button>
+    </nav>
+
+    <main>
+      <section class="view active" id="studentView">
+        <div class="station-layout">
+          <section class="panel sign-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Student Station</p>
+                <h2>Choose your name</h2>
+              </div>
+              <div class="date-pill" id="todayPill"></div>
+            </div>
+            <div class="class-tabs" id="studentClassTabs"></div>
+            <div class="student-grid" id="studentGrid"></div>
+          </section>
+
+          <section class="panel action-panel" id="actionPanel">
+            <div class="empty-state">
+              <h2>No student selected</h2>
+              <p>Select a student to sign out, sign back in, or record a tardy.</p>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="teacherView">
+        <div class="dashboard-grid">
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">9 Weeks Watchlist</p>
+                <h2>Students to watch</h2>
+              </div>
+              <div class="filter-stack">
+                <select id="dashboardClassFilter" aria-label="Class filter"></select>
+                <select id="periodFilter" aria-label="9 weeks filter"></select>
+              </div>
+            </div>
+            <div class="watchlist" id="watchlist"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Today</p>
+                <h2>Currently signed out</h2>
+              </div>
+              <span class="count-badge" id="outCount">0</span>
+            </div>
+            <div class="current-list" id="currentOutList"></div>
+          </section>
+        </div>
+
+        <section class="panel table-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Year Log</p>
+              <h2>Entries</h2>
+            </div>
+            <div class="inline-actions">
+              <select id="logClassFilter" aria-label="Log class filter"></select>
+              <select id="typeFilter" aria-label="Type filter">
+                <option value="all">All types</option>
+                <option value="Restroom">Restroom</option>
+                <option value="Classroom">Classroom</option>
+                <option value="Tardy">Tardy</option>
+              </select>
+              <button class="secondary" id="downloadCsvBtn" type="button">Download CSV</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Class</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Out / Arrival</th>
+                  <th>In</th>
+                  <th>Minutes</th>
+                  <th>9 Weeks</th>
+                  <th>Note</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="logTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="setupView">
+        <div class="setup-tabs" aria-label="Setup sections">
+          <button class="setup-tab active" data-setup-tab="classes" type="button">Classes</button>
+          <button class="setup-tab" data-setup-tab="students" type="button">Students & PINs</button>
+          <button class="setup-tab" data-setup-tab="rules" type="button">Class Rules</button>
+          <button class="setup-tab" data-setup-tab="year" type="button">School Year</button>
+        </div>
+
+        <section class="panel setup-section active" data-setup-section="classes">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Classes</p>
+              <h2>Class setup</h2>
+            </div>
+          </div>
+          <div class="section-grid">
+            <div>
+              <label for="classNameInput">Add class</label>
+              <div class="input-row">
+                <input id="classNameInput" type="text" placeholder="Example: 1st Period Biology">
+                <button id="addClassBtn" type="button">Add Class</button>
+              </div>
+            </div>
+            <div class="teacher-help">
+              <strong>Teacher note</strong>
+              <span>Each class can have its own hall pass limit and lunch detention rule.</span>
+            </div>
+          </div>
+          <div class="class-list" id="classList"></div>
+        </section>
+
+        <section class="panel setup-section" data-setup-section="students">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Students</p>
+              <h2>Roster and PINs</h2>
+            </div>
+          </div>
+          <div class="setup-grid">
+            <section>
+              <h3>Paste students into a class</h3>
+              <label for="bulkClassSelect">Class</label>
+              <select id="bulkClassSelect"></select>
+              <label for="bulkStudentInput">Paste names</label>
+              <textarea id="bulkStudentInput" rows="8" placeholder="Paste one student per line&#10;Avery Smith&#10;Jordan Taylor&#10;Morgan Lee"></textarea>
+              <button id="importStudentsBtn" type="button">Add Pasted Students</button>
+            </section>
+
+            <section>
+              <h3>Add one student</h3>
+              <label for="studentClassSelect">Class</label>
+              <select id="studentClassSelect"></select>
+              <label for="studentNameInput">Student name</label>
+              <div class="input-row">
+                <input id="studentNameInput" type="text" placeholder="Student name">
+                <button id="addStudentBtn" type="button">Add</button>
+              </div>
+              <p class="security-note">Edit student PINs below after students are added.</p>
+            </section>
+          </div>
+          <div class="student-list" id="studentList"></div>
+        </section>
+
+        <section class="panel setup-section" data-setup-section="rules">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Rules</p>
+              <h2>Class rules</h2>
+            </div>
+          </div>
+          <div class="field-grid">
+            <label>
+              Class
+              <select id="ruleClassSelect"></select>
+            </label>
+            <label>
+              Hall passes per 9 weeks
+              <input id="thresholdInput" min="0" type="number">
+            </label>
+            <label>
+              Tardy strikes before lunch detention
+              <input id="lunchDetentionStrikesInput" min="1" type="number">
+            </label>
+            <label>
+              Teacher dashboard password
+              <input id="teacherPasswordInput" type="text">
+            </label>
+          </div>
+          <p class="security-note">Set hall passes to 0 for no hall pass limit. Local classroom protection only; passwords are saved on this computer.</p>
+          <div class="inline-actions setup-actions">
+            <button id="saveClassRulesBtn" type="button">Save Class Rules</button>
+            <button class="secondary" id="saveSettingsBtn" type="button">Save Password</button>
+          </div>
+
+          <h3>Classroom sign-out options</h3>
+          <label for="classroomOptionInput">Add option</label>
+          <div class="input-row">
+            <input id="classroomOptionInput" type="text" placeholder="Example: guidance counselor">
+            <button id="addClassroomOptionBtn" type="button">Add Option</button>
+          </div>
+          <div class="option-list" id="classroomOptionList"></div>
+        </section>
+
+        <section class="panel setup-section" data-setup-section="year">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">School Year</p>
+              <h2>9-week dates</h2>
+            </div>
+          </div>
+          <div class="field-grid single-field">
+            <label>
+              School year name
+              <input id="schoolYearInput" type="text">
+            </label>
+          </div>
+          <div class="period-editor" id="periodEditor"></div>
+          <button id="saveSchoolYearBtn" type="button">Save School Year</button>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="noteDialog">
+      <form method="dialog">
+        <h2 id="noteDialogTitle">Add note</h2>
+        <p id="noteDialogText"></p>
+        <div id="destinationField">
+          <label for="destinationSelect">Where are you going?</label>
+          <select id="destinationSelect"></select>
+        </div>
+        <div id="tardyPassField">
+          <p class="field-label">Did you have a pass?</p>
+          <div class="pass-options">
+            <label>
+              <input name="tardyPassStatus" type="radio" value="Pass">
+              <span>Pass</span>
+            </label>
+            <label>
+              <input name="tardyPassStatus" type="radio" value="No Pass" checked>
+              <span>No Pass</span>
+            </label>
+          </div>
+        </div>
+        <div id="noteField">
+          <label for="noteInput">Optional note</label>
+          <textarea id="noteInput" rows="4" placeholder="Example: returned with office pass, late bus, teacher note"></textarea>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary" value="cancel" type="submit">Cancel</button>
+          <button id="confirmActionBtn" value="confirm" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="hallPassLimitDialog">
+      <form method="dialog">
+        <h2>Hall pass limit reached</h2>
+        <p id="hallPassLimitText">You have used all 8 hall passes for this 9 weeks.</p>
+        <div class="choice-actions">
+          <button value="extra" type="submit">Count as extra hall pass</button>
+          <button class="secondary" value="tardy" type="submit">Count as tardy strike</button>
+          <button class="secondary" value="cancel" type="submit">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="pinDialog">
+      <form method="dialog">
+        <h2>Enter PIN</h2>
+        <p id="pinDialogText">Enter your 4-digit PIN.</p>
+        <input id="pinInput" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="4-digit PIN" autocomplete="off">
+        <p class="dialog-error" id="pinError"></p>
+        <div class="dialog-actions">
+          <button class="secondary" value="cancel" type="submit">Cancel</button>
+          <button value="confirm" type="submit">Continue</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="teacherPasswordDialog">
+      <form method="dialog">
+        <h2 id="teacherPasswordDialogTitle">Teacher Access</h2>
+        <p id="teacherPasswordDialogText">Enter the teacher password to continue.</p>
+        <input id="teacherPasswordEntry" type="password" placeholder="Teacher password" autocomplete="off">
+        <p class="dialog-error" id="teacherPasswordError"></p>
+        <div class="dialog-actions">
+          <button class="secondary" value="cancel" type="submit">Cancel</button>
+          <button id="teacherPasswordSubmitBtn" value="confirm" type="submit">Unlock</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="editLogDialog">
+      <form method="dialog">
+        <h2>Edit entry</h2>
+        <div class="edit-grid">
+          <label>
+            Student
+            <select id="editStudentSelect"></select>
+          </label>
+          <label>
+            Type
+            <select id="editTypeSelect">
+              <option value="Restroom">Restroom</option>
+              <option value="Classroom">Classroom</option>
+              <option value="Tardy">Tardy</option>
+            </select>
+          </label>
+          <label id="editDestinationField">
+            Classroom destination
+            <select id="editDestinationSelect"></select>
+          </label>
+          <label id="editPassField">
+            Tardy pass
+            <select id="editPassSelect">
+              <option value="Pass">Pass</option>
+              <option value="No Pass">No Pass</option>
+            </select>
+          </label>
+          <label id="editExtraHallPassField" class="checkbox-field">
+            <input id="editExtraHallPassInput" type="checkbox">
+            <span>Mark as extra hall pass</span>
+          </label>
+          <label>
+            Out / arrival time
+            <input id="editOutAtInput" type="datetime-local">
+          </label>
+          <label id="editInAtField">
+            Return time
+            <input id="editInAtInput" type="datetime-local">
+          </label>
+          <label>
+            9 weeks
+            <select id="editPeriodSelect"></select>
+          </label>
+          <label class="full-field">
+            Note
+            <textarea id="editNoteInput" rows="3"></textarea>
+          </label>
+          <label class="full-field">
+            Return note
+            <textarea id="editReturnNoteInput" rows="3"></textarea>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button class="secondary" value="cancel" type="submit">Cancel</button>
+          <button id="saveEditedLogBtn" value="save" type="submit">Save Changes</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
