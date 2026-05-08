@@ -1293,6 +1293,12 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function clickOnEnter(event, action) {
+  if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey) return;
+  event.preventDefault();
+  action();
+}
+
 document.addEventListener("click", (event) => {
   const setupTab = event.target.closest("[data-setup-tab]");
   if (setupTab) {
@@ -1394,6 +1400,21 @@ document.addEventListener("change", (event) => {
   if (pinInput) updateStudentPin(pinInput.dataset.studentPin, pinInput.value);
 });
 
+document.addEventListener("keydown", (event) => {
+  const pinInput = event.target.closest("[data-student-pin]");
+  if (pinInput) {
+    clickOnEnter(event, () => {
+      updateStudentPin(pinInput.dataset.studentPin, pinInput.value);
+      pinInput.blur();
+    });
+    return;
+  }
+
+  if (event.target?.id?.endsWith("-start") || event.target?.id?.endsWith("-end")) {
+    clickOnEnter(event, () => saveSchoolYearSettings(true));
+  }
+});
+
 els.tabs.forEach((tab) => tab.addEventListener("click", () => switchView(tab.dataset.view)));
 els.dashboardClassFilter.addEventListener("change", renderTeacherDashboard);
 els.periodFilter.addEventListener("change", renderTeacherDashboard);
@@ -1427,6 +1448,11 @@ els.studentNameInput.addEventListener("keydown", (event) => {
 els.saveSettingsBtn.addEventListener("click", saveSettings);
 els.saveClassRulesBtn.addEventListener("click", saveClassRules);
 els.saveSchoolYearBtn.addEventListener("click", () => saveSchoolYearSettings(true));
+els.thresholdInput.addEventListener("keydown", (event) => clickOnEnter(event, saveClassRules));
+els.lunchDetentionStrikesInput.addEventListener("keydown", (event) => clickOnEnter(event, saveClassRules));
+els.maxStudentsOutInput.addEventListener("keydown", (event) => clickOnEnter(event, saveClassRules));
+els.teacherPasswordInput.addEventListener("keydown", (event) => clickOnEnter(event, saveSettings));
+els.schoolYearInput.addEventListener("keydown", (event) => clickOnEnter(event, () => saveSchoolYearSettings(true)));
 els.ruleClassSelect.addEventListener("change", () => {
   activeRuleClassId = els.ruleClassSelect.value;
   renderSetup();
