@@ -367,7 +367,7 @@ function getSignOutLabel(log) {
 
 function isTeacherPasswordConfigured() {
   const password = String(state.settings.teacherPassword || "").trim();
-  return Boolean(state.settings.teacherPasswordConfigured && password && password !== "teacher123");
+  return Boolean(state.settings.teacherPasswordConfigured && password);
 }
 
 function isProtectedTeacherView(viewName) {
@@ -424,7 +424,19 @@ function unlockTeacherView() {
   }
   const expected = state.settings.teacherPassword;
   if (entered !== expected) {
-    els.teacherPasswordError.textContent = "Incorrect password. If you never created one, refresh and create a new teacher password.";
+    if (entered === "reset") {
+      state.settings.teacherPassword = "";
+      state.settings.teacherPasswordConfigured = false;
+      saveState();
+      els.teacherPasswordEntry.value = "";
+      els.teacherPasswordError.textContent = "Password reset. Type a new teacher password and press Unlock.";
+      els.teacherPasswordDialogTitle.textContent = "Create Teacher Password";
+      els.teacherPasswordDialogText.textContent = "Create a teacher password before opening the Teacher Dashboard or Setup.";
+      els.teacherPasswordEntry.placeholder = "Create teacher password";
+      els.teacherPasswordSubmitBtn.textContent = "Save Password";
+      return;
+    }
+    els.teacherPasswordError.textContent = "Incorrect password. Type reset to create a new teacher password.";
     els.teacherPasswordEntry.value = "";
     return;
   }
@@ -863,9 +875,10 @@ function removeStudent(studentId) {
 }
 
 function saveSettings() {
+  const teacherPassword = els.teacherPasswordInput.value.trim();
   saveSchoolYearSettings(false);
-  state.settings.teacherPassword = els.teacherPasswordInput.value.trim();
-  state.settings.teacherPasswordConfigured = Boolean(els.teacherPasswordInput.value.trim());
+  state.settings.teacherPassword = teacherPassword;
+  state.settings.teacherPasswordConfigured = Boolean(teacherPassword);
   saveState();
   render();
 }
