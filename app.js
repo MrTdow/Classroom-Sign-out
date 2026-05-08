@@ -1312,6 +1312,18 @@ function clickOnEnter(event, action) {
   action();
 }
 
+function clickFocusedButtonOnEnter(event) {
+  if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey) return false;
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.matches("input, textarea, select")) return false;
+  const clickTarget = target.closest('button, [role="button"], .file-button');
+  if (!clickTarget || clickTarget.getAttribute("aria-disabled") === "true" || clickTarget.disabled) return false;
+  event.preventDefault();
+  clickTarget.click();
+  return true;
+}
+
 document.addEventListener("click", (event) => {
   const setupTab = event.target.closest("[data-setup-tab]");
   if (setupTab) {
@@ -1414,6 +1426,8 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (clickFocusedButtonOnEnter(event)) return;
+
   const pinInput = event.target.closest("[data-student-pin]");
   if (pinInput) {
     clickOnEnter(event, () => {
