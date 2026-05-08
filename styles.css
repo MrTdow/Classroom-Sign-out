@@ -547,6 +547,27 @@ main {
   margin-top: 18px;
 }
 
+.student-current-panel {
+  margin-top: 18px;
+}
+
+.list-toolbar {
+  align-items: center;
+  background: #f7f8fb;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.list-toolbar span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -635,7 +656,8 @@ dialog::backdrop {
   .inline-actions,
   .input-row,
   .choice-actions,
-  .row-actions {
+  .row-actions,
+  .list-toolbar {
     flex-direction: column;
   }
 

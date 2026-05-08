@@ -1,7 +1,8 @@
 const STORAGE_KEY = "classroomSignOutTracker.v1";
 const DEFAULT_CLASS_RULES = {
   hallPassLimit: 8,
-  lunchDetentionStrikes: 3
+  lunchDetentionStrikes: 3,
+  maxStudentsOut: 0
 };
 
 function makeId() {
@@ -40,6 +41,7 @@ let selectedStudentId = null;
 let activeClassId = state.classes[0]?.id || "default-class";
 let pendingAction = null;
 let pendingHallPassLimit = null;
+let pendingMaxOutApproval = null;
 let pendingPinAction = null;
 let pendingTeacherView = null;
 let teacherUnlocked = false;
@@ -59,6 +61,8 @@ const els = {
   studentClassTabs: document.getElementById("studentClassTabs"),
   studentGrid: document.getElementById("studentGrid"),
   actionPanel: document.getElementById("actionPanel"),
+  studentOutCount: document.getElementById("studentOutCount"),
+  studentCurrentOutList: document.getElementById("studentCurrentOutList"),
   dashboardClassFilter: document.getElementById("dashboardClassFilter"),
   periodFilter: document.getElementById("periodFilter"),
   watchlist: document.getElementById("watchlist"),
@@ -82,6 +86,7 @@ const els = {
   schoolYearInput: document.getElementById("schoolYearInput"),
   thresholdInput: document.getElementById("thresholdInput"),
   lunchDetentionStrikesInput: document.getElementById("lunchDetentionStrikesInput"),
+  maxStudentsOutInput: document.getElementById("maxStudentsOutInput"),
   teacherPasswordInput: document.getElementById("teacherPasswordInput"),
   periodEditor: document.getElementById("periodEditor"),
   saveSettingsBtn: document.getElementById("saveSettingsBtn"),
@@ -101,6 +106,10 @@ const els = {
   confirmActionBtn: document.getElementById("confirmActionBtn"),
   hallPassLimitDialog: document.getElementById("hallPassLimitDialog"),
   hallPassLimitText: document.getElementById("hallPassLimitText"),
+  maxOutDialog: document.getElementById("maxOutDialog"),
+  maxOutDialogText: document.getElementById("maxOutDialogText"),
+  maxOutPasswordInput: document.getElementById("maxOutPasswordInput"),
+  maxOutPasswordError: document.getElementById("maxOutPasswordError"),
   pinDialog: document.getElementById("pinDialog"),
   pinDialogText: document.getElementById("pinDialogText"),
   pinInput: document.getElementById("pinInput"),
@@ -189,9 +198,11 @@ function normalizeClassroomOptions(options) {
 function normalizeClassRules(rules = {}) {
   const hallPassLimit = Number(rules.hallPassLimit ?? rules.threshold ?? DEFAULT_CLASS_RULES.hallPassLimit);
   const lunchDetentionStrikes = Number(rules.lunchDetentionStrikes ?? DEFAULT_CLASS_RULES.lunchDetentionStrikes);
+  const maxStudentsOut = Number(rules.maxStudentsOut ?? DEFAULT_CLASS_RULES.maxStudentsOut);
   return {
     hallPassLimit: Number.isFinite(hallPassLimit) && hallPassLimit >= 0 ? Math.floor(hallPassLimit) : DEFAULT_CLASS_RULES.hallPassLimit,
-    lunchDetentionStrikes: Number.isFinite(lunchDetentionStrikes) && lunchDetentionStrikes >= 1 ? Math.floor(lunchDetentionStrikes) : DEFAULT_CLASS_RULES.lunchDetentionStrikes
+    lunchDetentionStrikes: Number.isFinite(lunchDetentionStrikes) && lunchDetentionStrikes >= 1 ? Math.floor(lunchDetentionStrikes) : DEFAULT_CLASS_RULES.lunchDetentionStrikes,
+    maxStudentsOut: Number.isFinite(maxStudentsOut) && maxStudentsOut >= 0 ? Math.floor(maxStudentsOut) : DEFAULT_CLASS_RULES.maxStudentsOut
   };
 }
 
@@ -272,6 +283,10 @@ function getOpenLog(studentId) {
   return state.logs.find((log) => log.studentId === studentId && log.type !== "Tardy" && !log.inAt);
 }
 
+function getOpenLogsForClass(classId) {
+  return state.logs.filter((log) => log.classId === classId && log.type !== "Tardy" && !log.inAt);
+}
+
 function getPeriodForDate(value) {
   const date = localDateKey(value);
   return state.settings.periods.find((period) => date >= period.start && date <= period.end);
@@ -340,6 +355,14 @@ function getLogStatus(log) {
   if (log.type === "Tardy") return isTardyStrike(log) ? "Tardy strike / no pass" : "Tardy with pass";
   if (log.isExtraHallPass || log.hallPassChoice === "Extra hall pass") return "Extra hall pass";
   return "Normal sign-out";
+}
+
+function getTypeLabel(type) {
+  return type === "Classroom" ? "Other Destination" : type;
+}
+
+function getSignOutLabel(log) {
+  return log.destination || getTypeLabel(log.type);
 }
 
 function isTeacherPasswordConfigured() {
@@ -508,7 +531,7 @@ function addClassroomOption() {
 
 function removeClassroomOption(option) {
   if (state.settings.classroomOptions.length === 1) {
-    alert("Keep at least one classroom sign-out option.");
+    alert("Keep at least one destination option.");
     return;
   }
   state.settings.classroomOptions = state.settings.classroomOptions.filter((item) => item !== option);
@@ -635,11 +658,51 @@ function openHallPassLimitDialog(action, studentId) {
   els.hallPassLimitDialog.showModal();
 }
 
+function isClassOutLimitReached(studentId) {
+  const student = getStudent(studentId);
+  if (!student) return false;
+  const rules = getClassRules(student.classId);
+  if (rules.maxStudentsOut <= 0) return false;
+  return getOpenLogsForClass(student.classId).length >= rules.maxStudentsOut;
+}
+
+function openMaxOutApprovalDialog(action, studentId) {
+  const student = getStudent(studentId);
+  const rules = getStudentRules(studentId);
+  const openCount = student ? getOpenLogsForClass(student.classId).length : 0;
+  pendingMaxOutApproval = { action, studentId };
+  els.maxOutDialogText.textContent = `${getClass(student?.classId)?.name || "This class"} already has ${openCount} student${openCount === 1 ? "" : "s"} signed out. The class limit is ${rules.maxStudentsOut}. Teacher approval is required before another sign-out.`;
+  els.maxOutPasswordInput.value = "";
+  els.maxOutPasswordError.textContent = "";
+  els.maxOutDialog.showModal();
+}
+
+function continueAfterMaxOutApproval() {
+  if (!pendingMaxOutApproval) return;
+  if (!isTeacherPasswordConfigured()) {
+    els.maxOutPasswordError.textContent = "Teacher password is not set. Set it in Setup first.";
+    return;
+  }
+  if (els.maxOutPasswordInput.value.trim() !== state.settings.teacherPassword) {
+    els.maxOutPasswordError.textContent = "Incorrect teacher password.";
+    els.maxOutPasswordInput.value = "";
+    return;
+  }
+  const { action, studentId } = pendingMaxOutApproval;
+  pendingMaxOutApproval = null;
+  els.maxOutDialog.close("approved");
+  continueHallPassAction(action, studentId, { skipMaxOutCheck: true });
+}
+
 function startHallPassAction(action, studentId) {
   requestStudentPin(studentId, "use a hall pass", () => continueHallPassAction(action, studentId));
 }
 
-function continueHallPassAction(action, studentId) {
+function continueHallPassAction(action, studentId, options = {}) {
+  if (!options.skipMaxOutCheck && isClassOutLimitReached(studentId)) {
+    openMaxOutApprovalDialog(action, studentId);
+    return;
+  }
   const period = getCurrentPeriod();
   const stats = getStudentPeriodStats(studentId, period.id);
   if (stats.hallPassLimit > 0 && stats.hallPassesUsed >= stats.hallPassLimit) {
@@ -664,7 +727,7 @@ function openNoteDialog(action, studentId, options = {}) {
     els.noteDialogTitle.textContent = "Record tardy";
     els.noteDialogText.textContent = `${student.name} is being marked tardy. A pass will keep this from counting as a strike.`;
   } else {
-    els.noteDialogTitle.textContent = `Sign out to ${action}`;
+    els.noteDialogTitle.textContent = action === "classroom" ? "Sign out to destination" : `Sign out to ${action}`;
     els.noteDialogText.textContent = `${student.name} is signing out.`;
   }
   els.destinationField.hidden = action !== "classroom";
@@ -760,6 +823,31 @@ function updateStudentPin(studentId, pin) {
   renderSetup();
 }
 
+function generatePin() {
+  return String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+}
+
+function generateMissingPins() {
+  const visibleStudents = getStudentsForClass(activeClassId);
+  const usedPins = new Set(state.students.map((student) => student.pin).filter(Boolean));
+  let updated = 0;
+  visibleStudents.forEach((student) => {
+    if (student.pin) return;
+    let pin = generatePin();
+    let attempts = 0;
+    while (usedPins.has(pin) && attempts < 50) {
+      pin = generatePin();
+      attempts += 1;
+    }
+    student.pin = pin;
+    usedPins.add(pin);
+    updated += 1;
+  });
+  saveState();
+  renderSetup();
+  alert(`Generated PINs for ${updated} student${updated === 1 ? "" : "s"}.`);
+}
+
 function removeStudent(studentId) {
   const student = getStudent(studentId);
   if (!student) return;
@@ -805,7 +893,8 @@ function saveClassRules() {
   if (!classItem) return;
   classItem.rules = normalizeClassRules({
     hallPassLimit: els.thresholdInput.value,
-    lunchDetentionStrikes: els.lunchDetentionStrikesInput.value
+    lunchDetentionStrikes: els.lunchDetentionStrikesInput.value,
+    maxStudentsOut: els.maxStudentsOutInput.value
   });
   activeRuleClassId = classId;
   saveState();
@@ -835,7 +924,7 @@ function renderStudentStation() {
     els.studentGrid.innerHTML = visibleStudents
       .map((student) => {
         const openLog = getOpenLog(student.id);
-        const status = openLog ? `Signed out: ${openLog.destination || openLog.type}` : "Ready";
+        const status = openLog ? `Signed out: ${getSignOutLabel(openLog)}` : "Ready";
         const classes = [
           "student-card",
           selectedStudentId === student.id ? "active" : "",
@@ -851,7 +940,23 @@ function renderStudentStation() {
       .join("");
   }
 
+  renderStudentCurrentOutList();
   renderActionPanel();
+}
+
+function renderStudentCurrentOutList() {
+  const openLogs = getOpenLogsForClass(activeClassId);
+  els.studentOutCount.textContent = openLogs.length;
+  els.studentCurrentOutList.innerHTML = openLogs.length
+    ? openLogs.map((log) => `
+        <div class="current-row">
+          <div>
+            <strong>${escapeHtml(log.studentName)}</strong>
+            <span>${escapeHtml(getSignOutLabel(log))} since ${formatDateTime(log.outAt)}</span>
+          </div>
+        </div>
+      `).join("")
+    : `<p class="no-data">No students are currently signed out.</p>`;
 }
 
 function renderActionPanel() {
@@ -884,7 +989,7 @@ function renderActionPanel() {
     els.actionPanel.innerHTML = `
       <p class="eyebrow">Selected Student</p>
       <h2 class="selected-name">${escapeHtml(student.name)}</h2>
-      <p class="muted">Currently signed out for ${escapeHtml(openLog.destination || openLog.type)} since ${formatDateTime(openLog.outAt)}.</p>
+      <p class="muted">Currently signed out for ${escapeHtml(getSignOutLabel(openLog))} since ${formatDateTime(openLog.outAt)}.</p>
       ${summaryHtml}
       <div class="action-stack">
         <button class="big-action sign-in" data-action="sign-in" type="button">Sign Back In</button>
@@ -969,7 +1074,7 @@ function renderTeacherDashboard() {
         <div class="current-row">
           <div>
             <strong>${escapeHtml(log.studentName)}</strong>
-            <span>${escapeHtml(log.destination || log.type)} since ${formatDateTime(log.outAt)}${selectedClassId === "all" ? `, ${escapeHtml(getClass(log.classId)?.name || "Class")}` : ""}</span>
+            <span>${escapeHtml(getSignOutLabel(log))} since ${formatDateTime(log.outAt)}${selectedClassId === "all" ? `, ${escapeHtml(getClass(log.classId)?.name || "Class")}` : ""}</span>
           </div>
           <button class="secondary" data-quick-sign-in="${log.studentId}" type="button">Sign In</button>
         </div>
@@ -992,7 +1097,7 @@ function renderLogTable() {
           <tr>
             <td>${escapeHtml(log.studentName)}</td>
             <td>${escapeHtml(getClass(log.classId)?.name || "Class")}</td>
-            <td>${escapeHtml(log.type)}</td>
+            <td>${escapeHtml(getTypeLabel(log.type))}</td>
             <td>${escapeHtml(getLogStatus(log))}</td>
             <td>${formatDateTime(log.outAt)}</td>
             <td>${formatDateTime(log.inAt)}</td>
@@ -1034,16 +1139,18 @@ function renderSetup() {
   const activeRules = getClassRules(activeRuleClassId);
   els.thresholdInput.value = activeRules.hallPassLimit;
   els.lunchDetentionStrikesInput.value = activeRules.lunchDetentionStrikes;
+  els.maxStudentsOutInput.value = activeRules.maxStudentsOut;
 
   els.classList.innerHTML = state.classes.map((classItem) => {
     const count = getStudentsForClass(classItem.id).length;
     const rules = getClassRules(classItem.id);
     const hallPassRuleText = rules.hallPassLimit > 0 ? `${rules.hallPassLimit} hall passes` : "No hall pass limit";
+    const maxOutText = rules.maxStudentsOut > 0 ? `${rules.maxStudentsOut} out max` : "No out max";
     return `
       <div class="student-row">
         <div>
           <strong>${escapeHtml(classItem.name)}</strong>
-          <span>${count} student${count === 1 ? "" : "s"} - ${hallPassRuleText} - detention at ${rules.lunchDetentionStrikes} tardy strike${rules.lunchDetentionStrikes === 1 ? "" : "s"}</span>
+          <span>${count} student${count === 1 ? "" : "s"} - ${hallPassRuleText} - ${maxOutText} - detention at ${rules.lunchDetentionStrikes} tardy strike${rules.lunchDetentionStrikes === 1 ? "" : "s"}</span>
         </div>
         <div class="row-actions">
           <button class="secondary" data-set-active-class="${classItem.id}" type="button">View</button>
@@ -1055,8 +1162,14 @@ function renderSetup() {
   }).join("");
 
   const visibleStudents = getStudentsForClass(activeClassId);
+  const missingPins = visibleStudents.filter((student) => !student.pin).length;
   els.studentList.innerHTML = visibleStudents.length
-    ? visibleStudents.map((student) => `
+    ? `
+        <div class="list-toolbar">
+          <span>${missingPins} student${missingPins === 1 ? "" : "s"} without a PIN in ${escapeHtml(getClass(activeClassId)?.name || "this class")}</span>
+          <button class="secondary" data-generate-missing-pins type="button">Generate Missing PINs</button>
+        </div>
+        ${visibleStudents.map((student) => `
         <div class="student-row">
           <div>
             <strong>${escapeHtml(student.name)}</strong>
@@ -1068,7 +1181,8 @@ function renderSetup() {
           </div>
           <button class="danger" data-remove-student="${student.id}" type="button">Remove</button>
         </div>
-      `).join("")
+      `).join("")}
+      `
     : `<p class="no-data">No students have been added to ${escapeHtml(getClass(activeClassId)?.name || "this class")} yet.</p>`;
 
   els.periodEditor.innerHTML = state.settings.periods.map((period) => `
@@ -1109,7 +1223,7 @@ function exportCsv() {
     rows.push([
       log.studentName,
       getClass(log.classId)?.name || "Class",
-      log.type,
+      getTypeLabel(log.type),
       getLogStatus(log),
       formatDateTime(log.outAt),
       formatDateTime(log.inAt),
@@ -1224,6 +1338,12 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const generatePinsButton = event.target.closest("[data-generate-missing-pins]");
+  if (generatePinsButton) {
+    generateMissingPins();
+    return;
+  }
+
   const editLogButton = event.target.closest("[data-edit-log]");
   if (editLogButton) {
     openEditLogDialog(editLogButton.dataset.editLog);
@@ -1331,6 +1451,17 @@ els.pinDialog.querySelector("form").addEventListener("submit", (event) => {
 els.pinInput.addEventListener("input", () => {
   els.pinInput.value = els.pinInput.value.replace(/\D/g, "").slice(0, 4);
   els.pinError.textContent = "";
+});
+els.maxOutDialog.querySelector("form").addEventListener("submit", (event) => {
+  if (event.submitter?.value === "approve") {
+    event.preventDefault();
+    continueAfterMaxOutApproval();
+    return;
+  }
+  pendingMaxOutApproval = null;
+});
+els.maxOutPasswordInput.addEventListener("input", () => {
+  els.maxOutPasswordError.textContent = "";
 });
 els.teacherPasswordDialog.querySelector("form").addEventListener("submit", (event) => {
   if (event.submitter?.value === "confirm") {

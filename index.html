@@ -12,11 +12,6 @@
         <p class="eyebrow">Classroom Tracker</p>
         <h1>Sign-Out, Sign-In, and Tardy Log</h1>
       </div>
-      <div class="header-actions">
-        <button class="secondary" id="backupBtn" type="button">Export Backup</button>
-        <label class="secondary file-button" for="restoreFile">Import Backup</label>
-        <input id="restoreFile" type="file" accept="application/json">
-      </div>
     </header>
 
     <nav class="top-tabs" aria-label="Main views">
@@ -47,6 +42,17 @@
             </div>
           </section>
         </div>
+
+        <section class="panel student-current-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Student Station</p>
+              <h2>Currently Signed Out</h2>
+            </div>
+            <span class="count-badge" id="studentOutCount">0</span>
+          </div>
+          <div class="current-list" id="studentCurrentOutList"></div>
+        </section>
       </section>
 
       <section class="view" id="teacherView">
@@ -88,10 +94,13 @@
               <select id="typeFilter" aria-label="Type filter">
                 <option value="all">All types</option>
                 <option value="Restroom">Restroom</option>
-                <option value="Classroom">Classroom</option>
+                <option value="Classroom">Other Destination</option>
                 <option value="Tardy">Tardy</option>
               </select>
               <button class="secondary" id="downloadCsvBtn" type="button">Download CSV</button>
+              <button class="secondary" id="backupBtn" type="button">Export Backup</button>
+              <label class="secondary file-button" for="restoreFile">Import Backup</label>
+              <input id="restoreFile" type="file" accept="application/json">
             </div>
           </div>
           <div class="table-wrap">
@@ -200,17 +209,21 @@
               <input id="lunchDetentionStrikesInput" min="1" type="number">
             </label>
             <label>
+              Max students signed out at once
+              <input id="maxStudentsOutInput" min="0" type="number">
+            </label>
+            <label>
               Teacher dashboard password
-              <input id="teacherPasswordInput" type="text">
+              <input id="teacherPasswordInput" type="password">
             </label>
           </div>
-          <p class="security-note">Set hall passes to 0 for no hall pass limit. Local classroom protection only; passwords are saved on this computer.</p>
+          <p class="security-note">Set hall passes or max students out to 0 for no limit. Local classroom protection only; passwords are saved on this computer.</p>
           <div class="inline-actions setup-actions">
             <button id="saveClassRulesBtn" type="button">Save Class Rules</button>
             <button class="secondary" id="saveSettingsBtn" type="button">Save Password</button>
           </div>
 
-          <h3>Classroom sign-out options</h3>
+          <h3>Destination options</h3>
           <label for="classroomOptionInput">Add option</label>
           <div class="input-row">
             <input id="classroomOptionInput" type="text" placeholder="Example: guidance counselor">
@@ -282,6 +295,22 @@
       </form>
     </dialog>
 
+    <dialog id="maxOutDialog">
+      <form method="dialog">
+        <h2>Teacher approval needed</h2>
+        <p id="maxOutDialogText">The class sign-out limit has been reached.</p>
+        <label>
+          Teacher password
+          <input id="maxOutPasswordInput" type="password" autocomplete="off">
+        </label>
+        <p class="dialog-error" id="maxOutPasswordError"></p>
+        <div class="dialog-actions">
+          <button class="secondary" value="cancel" type="submit">Cancel</button>
+          <button value="approve" type="submit">Approve</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="pinDialog">
       <form method="dialog">
         <h2>Enter PIN</h2>
@@ -320,12 +349,12 @@
             Type
             <select id="editTypeSelect">
               <option value="Restroom">Restroom</option>
-              <option value="Classroom">Classroom</option>
+              <option value="Classroom">Other Destination</option>
               <option value="Tardy">Tardy</option>
             </select>
           </label>
           <label id="editDestinationField">
-            Classroom destination
+            Destination
             <select id="editDestinationSelect"></select>
           </label>
           <label id="editPassField">
