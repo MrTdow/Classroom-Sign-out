@@ -4,9 +4,6 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Classroom Sign-Out Tracker</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -59,7 +56,6 @@
       </section>
 
       <section class="view" id="teacherView">
-        <div class="dashboard-stats" id="dashboardStats"></div>
         <div class="dashboard-grid">
           <section class="panel">
             <div class="panel-heading">
@@ -169,12 +165,17 @@
           </div>
           <div class="setup-grid">
             <section>
-              <h3>Paste students into a class</h3>
+              <h3>Import Google Classroom roster</h3>
               <label for="bulkClassSelect">Class</label>
               <select id="bulkClassSelect"></select>
-              <label for="bulkStudentInput">Paste names</label>
-              <textarea id="bulkStudentInput" rows="8" placeholder="Paste one student per line&#10;Avery Smith&#10;Jordan Taylor&#10;Morgan Lee"></textarea>
-              <button id="importStudentsBtn" type="button">Add Pasted Students</button>
+              <label for="bulkStudentInput">Paste roster names, emails, or CSV rows</label>
+              <textarea id="bulkStudentInput" rows="8" placeholder="Paste from Google Classroom, Google Sheets, or a CSV file&#10;Avery Smith, avery@example.com&#10;Jordan,Taylor,jordan@example.com&#10;Morgan Lee"></textarea>
+              <div class="input-row">
+                <button id="importStudentsBtn" type="button">Import Roster</button>
+                <label class="secondary file-button" for="rosterImportFile">Choose CSV/Text File</label>
+                <input id="rosterImportFile" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain">
+              </div>
+              <p class="security-note">For a direct Google Classroom connection, your school Google account would need to approve a Classroom API app. This local version imports copied or exported roster text.</p>
             </section>
 
             <section>
@@ -291,11 +292,6 @@
       <form method="dialog">
         <h2>Hall pass limit reached</h2>
         <p id="hallPassLimitText">You have used all 8 hall passes for this 9 weeks.</p>
-        <label>
-          Teacher password
-          <input id="hallPassPasswordInput" type="password" autocomplete="off">
-        </label>
-        <p class="dialog-error" id="hallPassPasswordError"></p>
         <div class="choice-actions">
           <button value="extra" type="submit">Count as extra hall pass</button>
           <button class="secondary" value="tardy" type="submit">Count as tardy strike</button>

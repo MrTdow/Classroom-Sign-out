@@ -65,7 +65,6 @@ const els = {
   studentCurrentOutList: document.getElementById("studentCurrentOutList"),
   dashboardClassFilter: document.getElementById("dashboardClassFilter"),
   periodFilter: document.getElementById("periodFilter"),
-  dashboardStats: document.getElementById("dashboardStats"),
   watchlist: document.getElementById("watchlist"),
   currentOutList: document.getElementById("currentOutList"),
   outCount: document.getElementById("outCount"),
@@ -79,6 +78,7 @@ const els = {
   bulkClassSelect: document.getElementById("bulkClassSelect"),
   bulkStudentInput: document.getElementById("bulkStudentInput"),
   importStudentsBtn: document.getElementById("importStudentsBtn"),
+  rosterImportFile: document.getElementById("rosterImportFile"),
   studentClassSelect: document.getElementById("studentClassSelect"),
   studentNameInput: document.getElementById("studentNameInput"),
   addStudentBtn: document.getElementById("addStudentBtn"),
@@ -107,8 +107,6 @@ const els = {
   confirmActionBtn: document.getElementById("confirmActionBtn"),
   hallPassLimitDialog: document.getElementById("hallPassLimitDialog"),
   hallPassLimitText: document.getElementById("hallPassLimitText"),
-  hallPassPasswordInput: document.getElementById("hallPassPasswordInput"),
-  hallPassPasswordError: document.getElementById("hallPassPasswordError"),
   maxOutDialog: document.getElementById("maxOutDialog"),
   maxOutDialogText: document.getElementById("maxOutDialogText"),
   maxOutPasswordInput: document.getElementById("maxOutPasswordInput"),
@@ -301,11 +299,10 @@ function getPeriodById(periodId) {
 
 function getCurrentPeriod() {
   const today = localDateKey();
-  return state.settings.periods.find((period) => today >= period.start && today <= period.end) || null;
+  return state.settings.periods.find((period) => today >= period.start && today <= period.end) || state.settings.periods[0];
 }
 
 function getMinutes(log) {
-  if (log.type === "Tardy") return "";
   if (!log.outAt || !log.inAt) return "";
   return Math.max(1, Math.round((new Date(log.inAt) - new Date(log.outAt)) / 60000));
 }
@@ -353,53 +350,6 @@ function getHallPassWarningMessage(used, limit = DEFAULT_CLASS_RULES.hallPassLim
   if (remaining === 1) return "Warning: You only have 1 hall pass left this 9 weeks.";
   if (remaining === 2) return "Warning: You only have 2 hall passes left this 9 weeks.";
   return "";
-}
-
-function getHallPassProgressPercent(used, limit) {
-  if (limit <= 0) return 0;
-  return Math.min(100, Math.round((used / limit) * 100));
-}
-
-function renderHallPassProgress(stats) {
-  const hasLimit = stats.hallPassLimit > 0;
-  const progress = getHallPassProgressPercent(stats.hallPassesUsed, stats.hallPassLimit);
-  const label = hasLimit
-    ? `${stats.hallPassesUsed} of ${stats.hallPassLimit} used`
-    : `${stats.hallPassesUsed} used`;
-  return `
-    <div class="progress-block">
-      <div class="progress-label">
-        <span>Hall passes</span>
-        <strong>${label}</strong>
-      </div>
-      <div class="progress-track" aria-label="${escapeHtml(label)}">
-        <span class="progress-fill ${progress >= 100 ? "limit" : progress >= 75 ? "warning" : ""}" style="width: ${hasLimit ? progress : 12}%"></span>
-      </div>
-    </div>
-  `;
-}
-
-function renderTardyDots(strikes, limit) {
-  const dotCount = Math.max(limit, strikes, 1);
-  return `
-    <div class="tardy-dots" aria-label="${strikes} of ${limit} tardy strikes">
-      ${Array.from({ length: dotCount }, (_, index) => {
-        const active = index < strikes;
-        const danger = index + 1 >= limit && active;
-        return `<span class="${active ? "active" : ""} ${danger ? "danger" : ""}"></span>`;
-      }).join("")}
-    </div>
-  `;
-}
-
-function renderAlertBox(type, title, message) {
-  if (!message) return "";
-  return `
-    <div class="alert-box ${type}">
-      <strong>${escapeHtml(title)}</strong>
-      <span>${escapeHtml(message)}</span>
-    </div>
-  `;
 }
 
 function getLogStatus(log) {
@@ -476,11 +426,18 @@ function unlockTeacherView() {
   const expected = state.settings.teacherPassword;
   if (entered !== expected) {
     if (entered === "reset") {
-      els.teacherPasswordError.textContent = "Password reset from this screen is disabled. Unlock Setup to change the password.";
+      state.settings.teacherPassword = "";
+      state.settings.teacherPasswordConfigured = false;
+      saveState();
       els.teacherPasswordEntry.value = "";
+      els.teacherPasswordError.textContent = "Password reset. Type a new teacher password and press Unlock.";
+      els.teacherPasswordDialogTitle.textContent = "Create Teacher Password";
+      els.teacherPasswordDialogText.textContent = "Create a teacher password before opening the Teacher Dashboard or Setup.";
+      els.teacherPasswordEntry.placeholder = "Create teacher password";
+      els.teacherPasswordSubmitBtn.textContent = "Save Password";
       return;
     }
-    els.teacherPasswordError.textContent = "Incorrect password. Try again or ask the teacher.";
+    els.teacherPasswordError.textContent = "Incorrect password. Type reset to create a new teacher password.";
     els.teacherPasswordEntry.value = "";
     return;
   }
@@ -541,12 +498,54 @@ function removeClass(classId) {
 }
 
 function parsePastedNames(text) {
-  return text
+  const headerWords = new Set(["name", "student", "students", "first", "first name", "last", "last name", "email", "email address"]);
+  return [...new Set(text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => line.replace(/^\d+[\).\-\s]+/, "").trim())
+    .map(extractStudentNameFromRosterLine)
+    .filter(Boolean)
+    .filter((name) => !headerWords.has(name.toLowerCase())))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function splitRosterLine(line) {
+  const parts = [];
+  let current = "";
+  let inQuotes = false;
+  for (const char of line) {
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (!inQuotes && (char === "," || char === "\t" || char === ";")) {
+      parts.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  parts.push(current.trim());
+  return parts.map((part) => part.replace(/^"|"$/g, "").trim()).filter(Boolean);
+}
+
+function cleanRosterName(value) {
+  return String(value || "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\b(student|teacher|guardian|co-teacher)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractStudentNameFromRosterLine(line) {
+  const parts = splitRosterLine(line)
+    .filter((part) => !/@/.test(part))
+    .map(cleanRosterName)
     .filter(Boolean);
+  if (!parts.length) return "";
+  if (parts.length >= 2 && parts[0].split(/\s+/).length === 1 && parts[1].split(/\s+/).length === 1) {
+    return `${parts[0]} ${parts[1]}`.trim();
+  }
+  return parts.find((part) => part.split(/\s+/).length >= 2) || parts[0];
 }
 
 function addStudentToClass(name, classId) {
@@ -569,6 +568,15 @@ function importBulkStudents() {
   saveState();
   render();
   alert(`Added ${added} student${added === 1 ? "" : "s"}.`);
+}
+
+function importRosterFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    els.bulkStudentInput.value = reader.result || "";
+    importBulkStudents();
+  };
+  reader.readAsText(file);
 }
 
 function addClassroomOption() {
@@ -607,20 +615,9 @@ function openEditLogDialog(logId) {
   const log = getLog(logId);
   if (!log) return;
   editingLogId = logId;
-  const rosterStudents = state.students
+  els.editStudentSelect.innerHTML = state.students
     .slice()
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const editStudents = rosterStudents.some((student) => student.id === log.studentId)
-    ? rosterStudents
-    : [
-        ...rosterStudents,
-        {
-          id: log.studentId,
-          classId: log.classId,
-          name: `${log.studentName} (removed from roster)`
-        }
-      ];
-  els.editStudentSelect.innerHTML = editStudents
+    .sort((a, b) => a.name.localeCompare(b.name))
     .map((student) => {
       const className = getClass(student.classId)?.name || "Class";
       return `<option value="${student.id}">${escapeHtml(student.name)} (${escapeHtml(className)})</option>`;
@@ -631,7 +628,6 @@ function openEditLogDialog(logId) {
     .join("");
   els.editPeriodSelect.innerHTML = state.settings.periods
     .map((period) => `<option value="${period.id}">${escapeHtml(period.name)}</option>`)
-    .concat(`<option value="outside">Outside 9-week dates</option>`)
     .join("");
 
   els.editStudentSelect.value = log.studentId;
@@ -650,12 +646,7 @@ function openEditLogDialog(logId) {
 
 function saveEditedLog() {
   const log = getLog(editingLogId);
-  const selectedStudentId = els.editStudentSelect.value;
-  const student = getStudent(selectedStudentId) || (
-    log && selectedStudentId === log.studentId
-      ? { id: log.studentId, name: log.studentName, classId: log.classId }
-      : null
-  );
+  const student = getStudent(els.editStudentSelect.value);
   if (!log || !student) return;
 
   const type = els.editTypeSelect.value;
@@ -675,7 +666,7 @@ function saveEditedLog() {
   log.destination = type === "Classroom" ? els.editDestinationSelect.value : "";
   log.passStatus = type === "Tardy" ? els.editPassSelect.value : "";
   log.outAt = fromDatetimeLocal(els.editOutAtInput.value) || log.outAt;
-  log.inAt = type === "Tardy" ? "" : fromDatetimeLocal(els.editInAtInput.value);
+  log.inAt = type === "Tardy" ? log.outAt : fromDatetimeLocal(els.editInAtInput.value);
   log.periodId = els.editPeriodSelect.value || getPeriodForDate(log.outAt)?.id || "outside";
   log.note = type === "Restroom" || type === "Tardy" ? "" : els.editNoteInput.value.trim();
   log.returnNote = type === "Tardy" ? "" : els.editReturnNoteInput.value.trim();
@@ -725,11 +716,9 @@ function confirmStudentPin() {
 function openHallPassLimitDialog(action, studentId) {
   const student = getStudent(studentId);
   const period = getCurrentPeriod();
-  const stats = getStudentPeriodStats(studentId, period?.id || "outside");
+  const stats = getStudentPeriodStats(studentId, period.id);
   pendingHallPassLimit = { action, studentId };
   els.hallPassLimitText.textContent = `${student.name}, you have used all ${stats.hallPassLimit} hall passes for this 9 weeks. Please check with your teacher before leaving. With teacher approval, how should this be recorded?`;
-  els.hallPassPasswordInput.value = "";
-  els.hallPassPasswordError.textContent = "";
   els.hallPassLimitDialog.showModal();
 }
 
@@ -779,7 +768,7 @@ function continueHallPassAction(action, studentId, options = {}) {
     return;
   }
   const period = getCurrentPeriod();
-  const stats = getStudentPeriodStats(studentId, period?.id || "outside");
+  const stats = getStudentPeriodStats(studentId, period.id);
   if (stats.hallPassLimit > 0 && stats.hallPassesUsed >= stats.hallPassLimit) {
     openHallPassLimitDialog(action, studentId);
     return;
@@ -832,7 +821,7 @@ function saveAction(action, studentId, options = {}) {
 
   const now = new Date().toISOString();
   const note = action === "restroom" || action === "tardy" ? "" : els.noteInput.value.trim();
-  const period = getPeriodForDate(now);
+  const period = getPeriodForDate(now) || getCurrentPeriod();
   const destination = action === "classroom" ? els.destinationSelect.value : "";
   const passStatusInput = document.querySelector('input[name="tardyPassStatus"]:checked');
   const actionType = action === "hall-pass-tardy" ? "Tardy" : action === "tardy" ? "Tardy" : action === "restroom" ? "Restroom" : "Classroom";
@@ -858,7 +847,7 @@ function saveAction(action, studentId, options = {}) {
       countsAsHallPass: actionType !== "Tardy",
       isExtraHallPass: Boolean(options.isExtraHallPass),
       outAt: now,
-      inAt: "",
+      inAt: actionType === "Tardy" ? now : "",
       periodId: period ? period.id : "outside",
       note: actionNote,
       hallPassChoice: options.hallPassChoice || "",
@@ -926,10 +915,6 @@ function generateMissingPins() {
 function removeStudent(studentId) {
   const student = getStudent(studentId);
   if (!student) return;
-  if (getOpenLog(studentId)) {
-    alert(`${student.name} is currently signed out. Sign them back in before removing them from the roster.`);
-    return;
-  }
   const hasLogs = state.logs.some((log) => log.studentId === studentId);
   const message = hasLogs
     ? `${student.name} has log history. Remove them from the active roster but keep their past entries?`
@@ -1004,8 +989,6 @@ function renderStudentStation() {
     els.studentGrid.innerHTML = visibleStudents
       .map((student) => {
         const openLog = getOpenLog(student.id);
-        const currentPeriod = getCurrentPeriod();
-        const stats = getStudentPeriodStats(student.id, currentPeriod?.id || "outside");
         const status = openLog ? `Signed out: ${getSignOutLabel(openLog)}` : "Ready";
         const classes = [
           "student-card",
@@ -1016,7 +999,6 @@ function renderStudentStation() {
           <button class="${classes}" data-select-student="${student.id}" type="button">
             <strong>${escapeHtml(student.name)}</strong>
             <span>${escapeHtml(status)}</span>
-            <small>${stats.hallPassLimit > 0 ? `${stats.hallPassesRemaining} passes left` : `${stats.hallPassesUsed} passes used`}</small>
           </button>
         `;
       })
@@ -1032,14 +1014,10 @@ function renderStudentCurrentOutList() {
   els.studentOutCount.textContent = openLogs.length;
   els.studentCurrentOutList.innerHTML = openLogs.length
     ? openLogs.map((log) => `
-        <div class="current-row current-card">
+        <div class="current-row">
           <div>
             <strong>${escapeHtml(log.studentName)}</strong>
-            <span>${escapeHtml(getSignOutLabel(log))}</span>
-          </div>
-          <div class="time-chip">
-            <span>Out since</span>
-            <strong>${formatDateTime(log.outAt)}</strong>
+            <span>${escapeHtml(getSignOutLabel(log))} since ${formatDateTime(log.outAt)}</span>
           </div>
         </div>
       `).join("")
@@ -1060,52 +1038,35 @@ function renderActionPanel() {
 
   const openLog = getOpenLog(student.id);
   const currentPeriod = getCurrentPeriod();
-  const stats = getStudentPeriodStats(student.id, currentPeriod?.id || "outside");
+  const stats = getStudentPeriodStats(student.id, currentPeriod.id);
   const hallPassWarning = getHallPassWarningMessage(stats.hallPassesUsed, stats.hallPassLimit);
   const tardyWarning = getTardyStrikeMessage(stats.tardyStrikes, stats.lunchDetentionStrikes);
   const summaryHtml = `
     <div class="student-summary">
-      <div class="summary-topline">
-        <span>Step 2</span>
-        <strong>Check your status</strong>
-      </div>
-      ${renderHallPassProgress(stats)}
-      <div class="mini-metrics">
-        <div>
-          <span>Remaining</span>
-          <strong>${stats.hallPassesRemaining}</strong>
-        </div>
-        <div>
-          <span>Tardy strikes</span>
-          <strong>${stats.tardyStrikes} / ${stats.lunchDetentionStrikes}</strong>
-          ${renderTardyDots(stats.tardyStrikes, stats.lunchDetentionStrikes)}
-        </div>
-      </div>
-      ${renderAlertBox("warning", "Hall pass warning", hallPassWarning)}
-      ${renderAlertBox("danger", "Tardy warning", tardyWarning)}
+      <div><strong>Hall passes used this 9 weeks:</strong> ${stats.hallPassLimit > 0 ? `${stats.hallPassesUsed} / ${stats.hallPassLimit}` : `${stats.hallPassesUsed} / No limit`}</div>
+      <div><strong>Hall passes remaining:</strong> ${stats.hallPassesRemaining}</div>
+      <div><strong>Tardy strikes this 9 weeks:</strong> ${stats.tardyStrikes} / ${stats.lunchDetentionStrikes}</div>
+      ${hallPassWarning ? `<p>${escapeHtml(hallPassWarning)}</p>` : ""}
+      ${tardyWarning ? `<p>${escapeHtml(tardyWarning)}</p>` : ""}
     </div>
   `;
   if (openLog) {
     els.actionPanel.innerHTML = `
-      <p class="eyebrow">Step 1 - Selected Student</p>
+      <p class="eyebrow">Selected Student</p>
       <h2 class="selected-name">${escapeHtml(student.name)}</h2>
       <p class="muted">Currently signed out for ${escapeHtml(getSignOutLabel(openLog))} since ${formatDateTime(openLog.outAt)}.</p>
       ${summaryHtml}
       <div class="action-stack">
-        <button class="big-action sign-in" data-action="sign-in" type="button">Step 3: Sign Back In</button>
+        <button class="big-action sign-in" data-action="sign-in" type="button">Sign Back In</button>
       </div>
     `;
     return;
   }
 
   els.actionPanel.innerHTML = `
-    <p class="eyebrow">Step 1 - Selected Student</p>
+    <p class="eyebrow">Selected Student</p>
     <h2 class="selected-name">${escapeHtml(student.name)}</h2>
     ${summaryHtml}
-    <div class="summary-topline action-step">
-      <span>Step 3</span>
-      <strong>Choose what you need</strong>
-    </div>
     <div class="action-stack">
       <button class="big-action restroom" data-action="restroom" type="button">Hall Pass: Restroom</button>
       <button class="big-action classroom" data-action="classroom" type="button">Hall Pass: Other Destination</button>
@@ -1117,7 +1078,7 @@ function renderActionPanel() {
 function renderTeacherDashboard() {
   ensureActiveClass();
   const currentPeriod = getCurrentPeriod();
-  const selectedPeriodId = els.periodFilter.value || currentPeriod?.id || state.settings.periods[0]?.id || "outside";
+  const selectedPeriodId = els.periodFilter.value || currentPeriod.id;
   const filterClassIds = new Set(["all", ...state.classes.map((classItem) => classItem.id)]);
   const selectedClassId = filterClassIds.has(els.dashboardClassFilter.value) ? els.dashboardClassFilter.value : "all";
   const selectedLogClassId = filterClassIds.has(els.logClassFilter.value) ? els.logClassFilter.value : "all";
@@ -1133,47 +1094,18 @@ function renderTeacherDashboard() {
 
   els.periodFilter.innerHTML = state.settings.periods
     .map((period) => `<option value="${period.id}">${period.name}</option>`)
-    .concat(`<option value="outside">Outside 9-week dates</option>`)
     .join("");
   els.periodFilter.value = selectedPeriodId;
 
   const period = getPeriodById(selectedPeriodId) || currentPeriod;
-  const periodName = period ? period.name : "Outside 9-week dates";
   const dashboardStudents = state.students.filter((student) => selectedClassId === "all" || student.classId === selectedClassId);
   const summaries = dashboardStudents.map((student) => {
-    const stats = getStudentPeriodStats(student.id, period?.id || selectedPeriodId);
+    const stats = getStudentPeriodStats(student.id, period.id);
     return {
       student,
       ...stats
     };
   }).sort((a, b) => b.tardyStrikes - a.tardyStrikes || b.extraHallPasses - a.extraHallPasses || b.hallPassesUsed - a.hallPassesUsed || b.tardies - a.tardies || a.student.name.localeCompare(b.student.name));
-
-  const openLogs = state.logs.filter((log) => log.type !== "Tardy" && !log.inAt && (selectedClassId === "all" || log.classId === selectedClassId));
-  const totalHallPasses = summaries.reduce((total, item) => total + item.hallPassesUsed, 0);
-  const totalTardyStrikes = summaries.reduce((total, item) => total + item.tardyStrikes, 0);
-  const flaggedStudents = summaries.filter((item) => item.extraHallPasses > 0 || item.tardyStrikes >= item.lunchDetentionStrikes).length;
-  els.dashboardStats.innerHTML = `
-    <div class="stat-card blue">
-      <span>Currently Out</span>
-      <strong>${openLogs.length}</strong>
-      <small>Students signed out now</small>
-    </div>
-    <div class="stat-card green">
-      <span>Hall Passes</span>
-      <strong>${totalHallPasses}</strong>
-      <small>${escapeHtml(periodName)} uses</small>
-    </div>
-    <div class="stat-card yellow">
-      <span>Tardy Strikes</span>
-      <strong>${totalTardyStrikes}</strong>
-      <small>No-pass tardies</small>
-    </div>
-    <div class="stat-card red">
-      <span>Needs Attention</span>
-      <strong>${flaggedStudents}</strong>
-      <small>Limit or detention flags</small>
-    </div>
-  `;
 
   const watchItems = summaries.filter((item) => item.hallPassesUsed > 0 || item.tardies > 0);
   els.watchlist.innerHTML = watchItems.length
@@ -1192,25 +1124,22 @@ function renderTeacherDashboard() {
           <div class="summary-row ${className}">
             <div>
               <strong>${escapeHtml(item.student.name)}</strong>
-              <span>${hallPassSummary} hall passes used, ${item.extraHallPasses} extra, ${item.hallPassesRemaining} remaining, ${item.tardyStrikes}/${item.lunchDetentionStrikes} tardy strikes during ${escapeHtml(periodName)}${selectedClassId === "all" ? `, ${escapeHtml(getClass(item.student.classId)?.name || "Class")}` : ""}</span>
+              <span>${hallPassSummary} hall passes used, ${item.extraHallPasses} extra, ${item.hallPassesRemaining} remaining, ${item.tardyStrikes}/${item.lunchDetentionStrikes} tardy strikes during ${escapeHtml(period.name)}${selectedClassId === "all" ? `, ${escapeHtml(getClass(item.student.classId)?.name || "Class")}` : ""}</span>
             </div>
             <span class="status-pill">${status}</span>
           </div>
         `;
       }).join("")
-    : `<p class="no-data">No entries for ${escapeHtml(periodName)} yet.</p>`;
+    : `<p class="no-data">No entries for ${escapeHtml(period.name)} yet.</p>`;
 
+  const openLogs = state.logs.filter((log) => log.type !== "Tardy" && !log.inAt && (selectedClassId === "all" || log.classId === selectedClassId));
   els.outCount.textContent = openLogs.length;
   els.currentOutList.innerHTML = openLogs.length
     ? openLogs.map((log) => `
-        <div class="current-row current-card">
+        <div class="current-row">
           <div>
             <strong>${escapeHtml(log.studentName)}</strong>
-            <span>${escapeHtml(getSignOutLabel(log))}${selectedClassId === "all" ? `, ${escapeHtml(getClass(log.classId)?.name || "Class")}` : ""}</span>
-          </div>
-          <div class="time-chip">
-            <span>Out since</span>
-            <strong>${formatDateTime(log.outAt)}</strong>
+            <span>${escapeHtml(getSignOutLabel(log))} since ${formatDateTime(log.outAt)}${selectedClassId === "all" ? `, ${escapeHtml(getClass(log.classId)?.name || "Class")}` : ""}</span>
           </div>
           <button class="secondary" data-quick-sign-in="${log.studentId}" type="button">Sign In</button>
         </div>
@@ -1435,20 +1364,6 @@ function clickOnEnter(event, action) {
   action();
 }
 
-function submitDialogActionOnEnter(event, dialog, buttonSelector) {
-  if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey) return;
-  if (!dialog.open || !dialog.contains(event.target)) return;
-  const actionButton = dialog.querySelector(buttonSelector);
-  if (!actionButton) return;
-  event.preventDefault();
-  event.stopPropagation();
-  if (typeof actionButton.form?.requestSubmit === "function") {
-    actionButton.form.requestSubmit(actionButton);
-  } else {
-    actionButton.click();
-  }
-}
-
 function clickFocusedButtonOnEnter(event) {
   if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey) return false;
   const target = event.target;
@@ -1591,6 +1506,11 @@ els.classNameInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") addClass();
 });
 els.importStudentsBtn.addEventListener("click", importBulkStudents);
+els.rosterImportFile.addEventListener("change", (event) => {
+  const [file] = event.target.files;
+  if (file) importRosterFile(file);
+  event.target.value = "";
+});
 els.bulkClassSelect.addEventListener("change", () => {
   activeClassId = els.bulkClassSelect.value;
   selectedStudentId = null;
@@ -1642,9 +1562,6 @@ els.pinInput.addEventListener("input", () => {
   els.pinInput.value = els.pinInput.value.replace(/\D/g, "").slice(0, 4);
   els.pinError.textContent = "";
 });
-els.pinInput.addEventListener("keydown", (event) => {
-  submitDialogActionOnEnter(event, els.pinDialog, 'button[value="confirm"]');
-});
 els.maxOutDialog.querySelector("form").addEventListener("submit", (event) => {
   if (!event.submitter || event.submitter.value === "approve") {
     event.preventDefault();
@@ -1655,29 +1572,6 @@ els.maxOutDialog.querySelector("form").addEventListener("submit", (event) => {
 });
 els.maxOutPasswordInput.addEventListener("input", () => {
   els.maxOutPasswordError.textContent = "";
-});
-els.maxOutPasswordInput.addEventListener("keydown", (event) => {
-  submitDialogActionOnEnter(event, els.maxOutDialog, 'button[value="approve"]');
-});
-els.hallPassLimitDialog.querySelector("form").addEventListener("submit", (event) => {
-  const choice = event.submitter?.value;
-  if (choice !== "extra" && choice !== "tardy") return;
-  if (!isTeacherPasswordConfigured()) {
-    event.preventDefault();
-    els.hallPassPasswordError.textContent = "Teacher password is not set. Set it in Setup first.";
-    return;
-  }
-  if (els.hallPassPasswordInput.value.trim() !== state.settings.teacherPassword) {
-    event.preventDefault();
-    els.hallPassPasswordError.textContent = "Incorrect teacher password.";
-    els.hallPassPasswordInput.value = "";
-  }
-});
-els.hallPassPasswordInput.addEventListener("input", () => {
-  els.hallPassPasswordError.textContent = "";
-});
-els.hallPassPasswordInput.addEventListener("keydown", (event) => {
-  submitDialogActionOnEnter(event, els.hallPassLimitDialog, 'button[value="extra"]');
 });
 els.teacherPasswordDialog.querySelector("form").addEventListener("submit", (event) => {
   if (!event.submitter || event.submitter.value === "confirm") {
@@ -1690,9 +1584,6 @@ els.teacherPasswordDialog.querySelector("form").addEventListener("submit", (even
 });
 els.teacherPasswordEntry.addEventListener("input", () => {
   els.teacherPasswordError.textContent = "";
-});
-els.teacherPasswordEntry.addEventListener("keydown", (event) => {
-  submitDialogActionOnEnter(event, els.teacherPasswordDialog, 'button[value="confirm"]');
 });
 els.hallPassLimitDialog.addEventListener("close", () => {
   if (!pendingHallPassLimit) return;
