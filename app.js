@@ -78,7 +78,6 @@ const els = {
   bulkClassSelect: document.getElementById("bulkClassSelect"),
   bulkStudentInput: document.getElementById("bulkStudentInput"),
   importStudentsBtn: document.getElementById("importStudentsBtn"),
-  rosterImportFile: document.getElementById("rosterImportFile"),
   studentClassSelect: document.getElementById("studentClassSelect"),
   studentNameInput: document.getElementById("studentNameInput"),
   addStudentBtn: document.getElementById("addStudentBtn"),
@@ -498,54 +497,12 @@ function removeClass(classId) {
 }
 
 function parsePastedNames(text) {
-  const headerWords = new Set(["name", "student", "students", "first", "first name", "last", "last name", "email", "email address"]);
-  return [...new Set(text
+  return text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => line.replace(/^\d+[\).\-\s]+/, "").trim())
-    .map(extractStudentNameFromRosterLine)
-    .filter(Boolean)
-    .filter((name) => !headerWords.has(name.toLowerCase())))]
-    .sort((a, b) => a.localeCompare(b));
-}
-
-function splitRosterLine(line) {
-  const parts = [];
-  let current = "";
-  let inQuotes = false;
-  for (const char of line) {
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (!inQuotes && (char === "," || char === "\t" || char === ";")) {
-      parts.push(current.trim());
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-  parts.push(current.trim());
-  return parts.map((part) => part.replace(/^"|"$/g, "").trim()).filter(Boolean);
-}
-
-function cleanRosterName(value) {
-  return String(value || "")
-    .replace(/\([^)]*\)/g, "")
-    .replace(/\b(student|teacher|guardian|co-teacher)\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function extractStudentNameFromRosterLine(line) {
-  const parts = splitRosterLine(line)
-    .filter((part) => !/@/.test(part))
-    .map(cleanRosterName)
     .filter(Boolean);
-  if (!parts.length) return "";
-  if (parts.length >= 2 && parts[0].split(/\s+/).length === 1 && parts[1].split(/\s+/).length === 1) {
-    return `${parts[0]} ${parts[1]}`.trim();
-  }
-  return parts.find((part) => part.split(/\s+/).length >= 2) || parts[0];
 }
 
 function addStudentToClass(name, classId) {
@@ -568,15 +525,6 @@ function importBulkStudents() {
   saveState();
   render();
   alert(`Added ${added} student${added === 1 ? "" : "s"}.`);
-}
-
-function importRosterFile(file) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    els.bulkStudentInput.value = reader.result || "";
-    importBulkStudents();
-  };
-  reader.readAsText(file);
 }
 
 function addClassroomOption() {
@@ -1506,11 +1454,6 @@ els.classNameInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") addClass();
 });
 els.importStudentsBtn.addEventListener("click", importBulkStudents);
-els.rosterImportFile.addEventListener("change", (event) => {
-  const [file] = event.target.files;
-  if (file) importRosterFile(file);
-  event.target.value = "";
-});
 els.bulkClassSelect.addEventListener("change", () => {
   activeClassId = els.bulkClassSelect.value;
   selectedStudentId = null;

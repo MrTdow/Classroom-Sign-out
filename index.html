@@ -165,17 +165,12 @@
           </div>
           <div class="setup-grid">
             <section>
-              <h3>Import Google Classroom roster</h3>
+              <h3>Paste students into a class</h3>
               <label for="bulkClassSelect">Class</label>
               <select id="bulkClassSelect"></select>
-              <label for="bulkStudentInput">Paste roster names, emails, or CSV rows</label>
-              <textarea id="bulkStudentInput" rows="8" placeholder="Paste from Google Classroom, Google Sheets, or a CSV file&#10;Avery Smith, avery@example.com&#10;Jordan,Taylor,jordan@example.com&#10;Morgan Lee"></textarea>
-              <div class="input-row">
-                <button id="importStudentsBtn" type="button">Import Roster</button>
-                <label class="secondary file-button" for="rosterImportFile">Choose CSV/Text File</label>
-                <input id="rosterImportFile" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain">
-              </div>
-              <p class="security-note">For a direct Google Classroom connection, your school Google account would need to approve a Classroom API app. This local version imports copied or exported roster text.</p>
+              <label for="bulkStudentInput">Paste names</label>
+              <textarea id="bulkStudentInput" rows="8" placeholder="Paste one student per line&#10;Avery Smith&#10;Jordan Taylor&#10;Morgan Lee"></textarea>
+              <button id="importStudentsBtn" type="button">Add Pasted Students</button>
             </section>
 
             <section>

@@ -182,8 +182,7 @@ main {
   justify-content: flex-end;
 }
 
-#restoreFile,
-#rosterImportFile {
+#restoreFile {
   display: none;
 }
 
