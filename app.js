@@ -65,6 +65,7 @@ const els = {
   studentCurrentOutList: document.getElementById("studentCurrentOutList"),
   dashboardClassFilter: document.getElementById("dashboardClassFilter"),
   periodFilter: document.getElementById("periodFilter"),
+  dashboardStats: document.getElementById("dashboardStats"),
   watchlist: document.getElementById("watchlist"),
   currentOutList: document.getElementById("currentOutList"),
   outCount: document.getElementById("outCount"),
@@ -306,6 +307,11 @@ function getMinutes(log) {
   return Math.max(1, Math.round((new Date(log.inAt) - new Date(log.outAt)) / 60000));
 }
 
+function getOpenMinutes(log) {
+  if (!log.outAt) return 0;
+  return Math.max(1, Math.round((Date.now() - new Date(log.outAt)) / 60000));
+}
+
 function isTardyStrike(log) {
   return log.type === "Tardy" && log.passStatus !== "Pass";
 }
@@ -400,6 +406,7 @@ function switchView(viewName) {
     els.teacherPasswordEntry.placeholder = needsSetup ? "Create teacher password" : "Teacher password";
     els.teacherPasswordSubmitBtn.textContent = needsSetup ? "Save Password" : "Unlock";
     els.teacherPasswordDialog.showModal();
+    requestAnimationFrame(() => els.teacherPasswordEntry.focus());
     return;
   }
   showView(viewName);
@@ -640,6 +647,7 @@ function requestStudentPin(studentId, actionLabel, onSuccess) {
   els.pinInput.value = "";
   els.pinError.textContent = student.pin ? "" : "PIN not set. Ask your teacher.";
   els.pinDialog.showModal();
+  requestAnimationFrame(() => els.pinInput.focus());
 }
 
 function confirmStudentPin() {
@@ -687,6 +695,7 @@ function openMaxOutApprovalDialog(action, studentId) {
   els.maxOutPasswordInput.value = "";
   els.maxOutPasswordError.textContent = "";
   els.maxOutDialog.showModal();
+  requestAnimationFrame(() => els.maxOutPasswordInput.focus());
 }
 
 function continueAfterMaxOutApproval() {
@@ -962,14 +971,44 @@ function renderStudentCurrentOutList() {
   els.studentOutCount.textContent = openLogs.length;
   els.studentCurrentOutList.innerHTML = openLogs.length
     ? openLogs.map((log) => `
-        <div class="current-row">
+        <div class="current-row kiosk-current-card">
           <div>
             <strong>${escapeHtml(log.studentName)}</strong>
             <span>${escapeHtml(getSignOutLabel(log))} since ${formatDateTime(log.outAt)}</span>
           </div>
+          <span class="time-chip">${getOpenMinutes(log)} min</span>
         </div>
       `).join("")
     : `<p class="no-data">No students are currently signed out.</p>`;
+}
+
+function renderHallPassProgress(stats) {
+  const hasLimit = stats.hallPassLimit > 0;
+  const percent = hasLimit ? Math.min(100, Math.round((stats.hallPassesUsed / stats.hallPassLimit) * 100)) : 0;
+  return `
+    <div class="progress-block">
+      <div class="progress-label">
+        <span>Hall passes</span>
+        <strong>${hasLimit ? `${stats.hallPassesUsed} / ${stats.hallPassLimit}` : `${stats.hallPassesUsed} used`}</strong>
+      </div>
+      <div class="progress-track">
+        <span class="progress-fill ${stats.extraHallPasses > 0 ? "danger" : percent >= 75 ? "warning" : ""}" style="width: ${percent}%;"></span>
+      </div>
+    </div>
+  `;
+}
+
+function renderTardyDots(strikes, limit) {
+  const count = Math.max(1, limit);
+  return `
+    <div class="tardy-dots" aria-label="${strikes} of ${limit} tardy strikes">
+      ${Array.from({ length: count }, (_, index) => `<span class="${index < strikes ? "filled" : ""}"></span>`).join("")}
+    </div>
+  `;
+}
+
+function renderWarningBox(message, type) {
+  return message ? `<div class="alert-box ${type}">${escapeHtml(message)}</div>` : "";
 }
 
 function renderActionPanel() {
@@ -991,16 +1030,18 @@ function renderActionPanel() {
   const tardyWarning = getTardyStrikeMessage(stats.tardyStrikes, stats.lunchDetentionStrikes);
   const summaryHtml = `
     <div class="student-summary">
-      <div><strong>Hall passes used this 9 weeks:</strong> ${stats.hallPassLimit > 0 ? `${stats.hallPassesUsed} / ${stats.hallPassLimit}` : `${stats.hallPassesUsed} / No limit`}</div>
-      <div><strong>Hall passes remaining:</strong> ${stats.hallPassesRemaining}</div>
-      <div><strong>Tardy strikes this 9 weeks:</strong> ${stats.tardyStrikes} / ${stats.lunchDetentionStrikes}</div>
-      ${hallPassWarning ? `<p>${escapeHtml(hallPassWarning)}</p>` : ""}
-      ${tardyWarning ? `<p>${escapeHtml(tardyWarning)}</p>` : ""}
+      ${renderHallPassProgress(stats)}
+      <div class="summary-grid">
+        <div><span>Remaining</span><strong>${stats.hallPassesRemaining}</strong></div>
+        <div><span>Tardy strikes</span><strong>${stats.tardyStrikes} / ${stats.lunchDetentionStrikes}</strong>${renderTardyDots(stats.tardyStrikes, stats.lunchDetentionStrikes)}</div>
+      </div>
+      ${renderWarningBox(hallPassWarning, stats.extraHallPasses > 0 || stats.hallPassesUsed >= stats.hallPassLimit ? "danger" : "warning")}
+      ${renderWarningBox(tardyWarning, stats.tardyStrikes >= stats.lunchDetentionStrikes ? "danger" : "warning")}
     </div>
   `;
   if (openLog) {
     els.actionPanel.innerHTML = `
-      <p class="eyebrow">Selected Student</p>
+      <p class="eyebrow">Step 2</p>
       <h2 class="selected-name">${escapeHtml(student.name)}</h2>
       <p class="muted">Currently signed out for ${escapeHtml(getSignOutLabel(openLog))} since ${formatDateTime(openLog.outAt)}.</p>
       ${summaryHtml}
@@ -1012,7 +1053,7 @@ function renderActionPanel() {
   }
 
   els.actionPanel.innerHTML = `
-    <p class="eyebrow">Selected Student</p>
+    <p class="eyebrow">Step 2</p>
     <h2 class="selected-name">${escapeHtml(student.name)}</h2>
     ${summaryHtml}
     <div class="action-stack">
@@ -1055,6 +1096,34 @@ function renderTeacherDashboard() {
     };
   }).sort((a, b) => b.tardyStrikes - a.tardyStrikes || b.extraHallPasses - a.extraHallPasses || b.hallPassesUsed - a.hallPassesUsed || b.tardies - a.tardies || a.student.name.localeCompare(b.student.name));
 
+  const openLogs = state.logs.filter((log) => log.type !== "Tardy" && !log.inAt && (selectedClassId === "all" || log.classId === selectedClassId));
+  const extraHallPassCount = summaries.filter((item) => item.extraHallPasses > 0).length;
+  const lowHallPassCount = summaries.filter((item) => item.hallPassLimit > 0 && item.hallPassesUsed >= item.hallPassLimit - 2 && item.extraHallPasses === 0).length;
+  const closeToDetentionCount = summaries.filter((item) => item.tardyStrikes === item.lunchDetentionStrikes - 1).length;
+  const detentionCount = summaries.filter((item) => item.tardyStrikes >= item.lunchDetentionStrikes).length;
+  els.dashboardStats.innerHTML = `
+    <div class="stat-card blue">
+      <span>Signed out now</span>
+      <strong>${openLogs.length}</strong>
+    </div>
+    <div class="stat-card yellow">
+      <span>Hall pass warnings</span>
+      <strong>${lowHallPassCount}</strong>
+    </div>
+    <div class="stat-card red">
+      <span>Over hall pass limit</span>
+      <strong>${extraHallPassCount}</strong>
+    </div>
+    <div class="stat-card red">
+      <span>Lunch detention</span>
+      <strong>${detentionCount}</strong>
+    </div>
+    <div class="stat-card yellow">
+      <span>Close to detention</span>
+      <strong>${closeToDetentionCount}</strong>
+    </div>
+  `;
+
   const watchItems = summaries.filter((item) => item.hallPassesUsed > 0 || item.tardies > 0);
   els.watchlist.innerHTML = watchItems.length
     ? watchItems.map((item) => {
@@ -1080,15 +1149,15 @@ function renderTeacherDashboard() {
       }).join("")
     : `<p class="no-data">No entries for ${escapeHtml(period.name)} yet.</p>`;
 
-  const openLogs = state.logs.filter((log) => log.type !== "Tardy" && !log.inAt && (selectedClassId === "all" || log.classId === selectedClassId));
   els.outCount.textContent = openLogs.length;
   els.currentOutList.innerHTML = openLogs.length
     ? openLogs.map((log) => `
-        <div class="current-row">
+        <div class="current-row dashboard-current-card">
           <div>
             <strong>${escapeHtml(log.studentName)}</strong>
             <span>${escapeHtml(getSignOutLabel(log))} since ${formatDateTime(log.outAt)}${selectedClassId === "all" ? `, ${escapeHtml(getClass(log.classId)?.name || "Class")}` : ""}</span>
           </div>
+          <span class="time-chip">${getOpenMinutes(log)} min</span>
           <button class="secondary" data-quick-sign-in="${log.studentId}" type="button">Sign In</button>
         </div>
       `).join("")
@@ -1312,6 +1381,13 @@ function clickOnEnter(event, action) {
   action();
 }
 
+function submitDialogInputOnEnter(event, dialog, action) {
+  if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey) return;
+  if (!dialog.open || !dialog.contains(event.target)) return;
+  event.preventDefault();
+  action();
+}
+
 function clickFocusedButtonOnEnter(event) {
   if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey) return false;
   const target = event.target;
@@ -1505,6 +1581,9 @@ els.pinInput.addEventListener("input", () => {
   els.pinInput.value = els.pinInput.value.replace(/\D/g, "").slice(0, 4);
   els.pinError.textContent = "";
 });
+els.pinInput.addEventListener("keydown", (event) => {
+  submitDialogInputOnEnter(event, els.pinDialog, confirmStudentPin);
+});
 els.maxOutDialog.querySelector("form").addEventListener("submit", (event) => {
   if (!event.submitter || event.submitter.value === "approve") {
     event.preventDefault();
@@ -1515,6 +1594,9 @@ els.maxOutDialog.querySelector("form").addEventListener("submit", (event) => {
 });
 els.maxOutPasswordInput.addEventListener("input", () => {
   els.maxOutPasswordError.textContent = "";
+});
+els.maxOutPasswordInput.addEventListener("keydown", (event) => {
+  submitDialogInputOnEnter(event, els.maxOutDialog, continueAfterMaxOutApproval);
 });
 els.teacherPasswordDialog.querySelector("form").addEventListener("submit", (event) => {
   if (!event.submitter || event.submitter.value === "confirm") {
@@ -1527,6 +1609,9 @@ els.teacherPasswordDialog.querySelector("form").addEventListener("submit", (even
 });
 els.teacherPasswordEntry.addEventListener("input", () => {
   els.teacherPasswordError.textContent = "";
+});
+els.teacherPasswordEntry.addEventListener("keydown", (event) => {
+  submitDialogInputOnEnter(event, els.teacherPasswordDialog, unlockTeacherView);
 });
 els.hallPassLimitDialog.addEventListener("close", () => {
   if (!pendingHallPassLimit) return;
