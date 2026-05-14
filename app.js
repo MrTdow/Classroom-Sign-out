@@ -4,6 +4,49 @@ const DEFAULT_CLASS_RULES = {
   lunchDetentionStrikes: 3,
   maxStudentsOut: 0
 };
+const DEFAULT_CUSTOMIZATION = {
+  teacherName: "",
+  roomNumber: "",
+  schoolName: "",
+  appTitle: "HallPass",
+  appSubtitle: "Student Sign-Out System",
+  colorTheme: "blue",
+  studentNameDisplay: "full",
+  showStudentCurrentOut: true,
+  showHallPassCounts: true,
+  autoResetSeconds: 0,
+  yellowTimeWarningMinutes: 10,
+  redTimeWarningMinutes: 15,
+  lowHallPassWarningMessage: "",
+  lunchDetentionWarningMessage: ""
+};
+
+const COLOR_THEMES = {
+  blue: {
+    bg: "#f3f7fb",
+    blue: "#2563eb",
+    blueDark: "#1d4ed8",
+    softBlue: "#eaf2ff"
+  },
+  green: {
+    bg: "#f3faf7",
+    blue: "#0f9f6e",
+    blueDark: "#047857",
+    softBlue: "#e7f8ef"
+  },
+  royal: {
+    bg: "#f2f6ff",
+    blue: "#1746a2",
+    blueDark: "#0f2f74",
+    softBlue: "#e6efff"
+  },
+  slate: {
+    bg: "#f5f7fa",
+    blue: "#334155",
+    blueDark: "#1e293b",
+    softBlue: "#eef2f7"
+  }
+};
 
 function makeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -19,6 +62,7 @@ const defaultState = {
     threshold: 8,
     teacherPassword: "",
     teacherPasswordConfigured: false,
+    customization: clone(DEFAULT_CUSTOMIZATION),
     classroomOptions: ["Locker", "Loaner Chromebook", "Nurse", "Office"],
     periods: [
       { id: "q1", name: "1st 9 Weeks", start: "2026-08-17", end: "2026-10-16" },
@@ -49,6 +93,7 @@ let editingLogId = null;
 let activeSetupTab = "classes";
 let activeRuleClassId = activeClassId;
 let activeViewName = "student";
+let selectedStudentResetTimer = null;
 
 const els = {
   tabs: document.querySelectorAll(".tab"),
@@ -57,6 +102,10 @@ const els = {
     teacher: document.getElementById("teacherView"),
     setup: document.getElementById("setupView")
   },
+  brandContext: document.getElementById("brandContext"),
+  appTitle: document.getElementById("appTitle"),
+  appSubtitle: document.getElementById("appSubtitle"),
+  brandDetails: document.getElementById("brandDetails"),
   todayPill: document.getElementById("todayPill"),
   studentClassTabs: document.getElementById("studentClassTabs"),
   studentGrid: document.getElementById("studentGrid"),
@@ -96,6 +145,21 @@ const els = {
   classroomOptionInput: document.getElementById("classroomOptionInput"),
   addClassroomOptionBtn: document.getElementById("addClassroomOptionBtn"),
   classroomOptionList: document.getElementById("classroomOptionList"),
+  teacherNameInput: document.getElementById("teacherNameInput"),
+  roomNumberInput: document.getElementById("roomNumberInput"),
+  schoolNameInput: document.getElementById("schoolNameInput"),
+  appTitleInput: document.getElementById("appTitleInput"),
+  appSubtitleInput: document.getElementById("appSubtitleInput"),
+  colorThemeInput: document.getElementById("colorThemeInput"),
+  studentNameDisplayInput: document.getElementById("studentNameDisplayInput"),
+  showStudentCurrentOutInput: document.getElementById("showStudentCurrentOutInput"),
+  showHallPassCountsInput: document.getElementById("showHallPassCountsInput"),
+  autoResetSecondsInput: document.getElementById("autoResetSecondsInput"),
+  yellowTimeWarningInput: document.getElementById("yellowTimeWarningInput"),
+  redTimeWarningInput: document.getElementById("redTimeWarningInput"),
+  lowHallPassMessageInput: document.getElementById("lowHallPassMessageInput"),
+  lunchDetentionMessageInput: document.getElementById("lunchDetentionMessageInput"),
+  saveCustomizationBtn: document.getElementById("saveCustomizationBtn"),
   destinationField: document.getElementById("destinationField"),
   destinationSelect: document.getElementById("destinationSelect"),
   tardyPassField: document.getElementById("tardyPassField"),
@@ -167,6 +231,7 @@ function normalizeState(incoming) {
   const settings = {
     ...clone(defaultState.settings),
     ...(incoming.settings || {}),
+    customization: normalizeCustomization(incoming.settings?.customization),
     classroomOptions: normalizeClassroomOptions(incoming.settings?.classroomOptions)
   };
   const fallbackClass = incoming.classes?.[0] || { id: "default-class", name: "My Class" };
@@ -189,6 +254,30 @@ function normalizeState(incoming) {
     isExtraHallPass: Boolean(log.isExtraHallPass || log.hallPassChoice === "Extra hall pass")
   }));
   return { ...incoming, settings, classes, students, logs };
+}
+
+function normalizeCustomization(customization = {}) {
+  const incoming = customization || {};
+  const autoResetSeconds = Number(incoming.autoResetSeconds ?? DEFAULT_CUSTOMIZATION.autoResetSeconds);
+  const yellowTimeWarningMinutes = Number(incoming.yellowTimeWarningMinutes ?? DEFAULT_CUSTOMIZATION.yellowTimeWarningMinutes);
+  const redTimeWarningMinutes = Number(incoming.redTimeWarningMinutes ?? DEFAULT_CUSTOMIZATION.redTimeWarningMinutes);
+  const colorTheme = COLOR_THEMES[incoming.colorTheme] ? incoming.colorTheme : DEFAULT_CUSTOMIZATION.colorTheme;
+  const studentNameDisplay = incoming.studentNameDisplay === "first" ? "first" : "full";
+  return {
+    ...clone(DEFAULT_CUSTOMIZATION),
+    ...incoming,
+    appTitle: String(incoming.appTitle || DEFAULT_CUSTOMIZATION.appTitle).trim(),
+    appSubtitle: String(incoming.appSubtitle ?? DEFAULT_CUSTOMIZATION.appSubtitle).trim(),
+    colorTheme,
+    studentNameDisplay,
+    showStudentCurrentOut: incoming.showStudentCurrentOut !== false,
+    showHallPassCounts: incoming.showHallPassCounts !== false,
+    autoResetSeconds: Number.isFinite(autoResetSeconds) && autoResetSeconds >= 0 ? Math.floor(autoResetSeconds) : DEFAULT_CUSTOMIZATION.autoResetSeconds,
+    yellowTimeWarningMinutes: Number.isFinite(yellowTimeWarningMinutes) && yellowTimeWarningMinutes >= 0 ? Math.floor(yellowTimeWarningMinutes) : DEFAULT_CUSTOMIZATION.yellowTimeWarningMinutes,
+    redTimeWarningMinutes: Number.isFinite(redTimeWarningMinutes) && redTimeWarningMinutes >= 0 ? Math.floor(redTimeWarningMinutes) : DEFAULT_CUSTOMIZATION.redTimeWarningMinutes,
+    lowHallPassWarningMessage: String(incoming.lowHallPassWarningMessage || "").trim(),
+    lunchDetentionWarningMessage: String(incoming.lunchDetentionWarningMessage || "").trim()
+  };
 }
 
 function normalizeClassroomOptions(options) {
@@ -341,7 +430,7 @@ function getStudentPeriodStats(studentId, periodId) {
 }
 
 function getTardyStrikeMessage(strikes, limit = DEFAULT_CLASS_RULES.lunchDetentionStrikes) {
-  if (strikes >= limit) return "Lunch detention threshold reached.";
+  if (strikes >= limit) return state.settings.customization.lunchDetentionWarningMessage || "Lunch detention threshold reached.";
   if (strikes === limit - 1) return "Warning: one more tardy strike may result in lunch detention.";
   if (strikes === 1) return "You have 1 tardy strike.";
   return "";
@@ -352,8 +441,8 @@ function getHallPassWarningMessage(used, limit = DEFAULT_CLASS_RULES.hallPassLim
   const remaining = limit - used;
   if (used > limit) return "You are over your hall pass limit. Please check with your teacher before leaving.";
   if (used === limit) return `You have used all ${limit} hall passes. Please check with your teacher before leaving.`;
-  if (remaining === 1) return "Warning: You only have 1 hall pass left this 9 weeks.";
-  if (remaining === 2) return "Warning: You only have 2 hall passes left this 9 weeks.";
+  if (remaining === 1) return state.settings.customization.lowHallPassWarningMessage || "Warning: You only have 1 hall pass left this 9 weeks.";
+  if (remaining === 2) return state.settings.customization.lowHallPassWarningMessage || "Warning: You only have 2 hall passes left this 9 weeks.";
   return "";
 }
 
@@ -369,6 +458,52 @@ function getTypeLabel(type) {
 
 function getSignOutLabel(log) {
   return log.destination || getTypeLabel(log.type);
+}
+
+function getStudentDisplayName(studentOrName) {
+  const name = typeof studentOrName === "string" ? studentOrName : studentOrName?.name || "";
+  if (state.settings.customization.studentNameDisplay !== "first") return name;
+  return name.trim().split(/\s+/)[0] || name;
+}
+
+function getTimeWarningLevel(minutes) {
+  const { yellowTimeWarningMinutes, redTimeWarningMinutes } = state.settings.customization;
+  if (redTimeWarningMinutes > 0 && minutes >= redTimeWarningMinutes) return "danger";
+  if (yellowTimeWarningMinutes > 0 && minutes >= yellowTimeWarningMinutes) return "warning";
+  return "";
+}
+
+function updateSelectedStudentResetTimer() {
+  clearTimeout(selectedStudentResetTimer);
+  selectedStudentResetTimer = null;
+  const seconds = state.settings.customization.autoResetSeconds;
+  if (!selectedStudentId || seconds <= 0) return;
+  selectedStudentResetTimer = setTimeout(() => {
+    selectedStudentId = null;
+    renderStudentStation();
+  }, seconds * 1000);
+}
+
+function applyThemeSettings() {
+  const theme = COLOR_THEMES[state.settings.customization.colorTheme] || COLOR_THEMES.blue;
+  const root = document.documentElement;
+  root.style.setProperty("--bg", theme.bg);
+  root.style.setProperty("--blue", theme.blue);
+  root.style.setProperty("--blue-dark", theme.blueDark);
+  root.style.setProperty("--soft-blue", theme.softBlue);
+}
+
+function renderHeader() {
+  const customization = state.settings.customization;
+  document.title = customization.appTitle || "HallPass";
+  els.appTitle.textContent = customization.appTitle || "HallPass";
+  els.appSubtitle.textContent = customization.appSubtitle || "";
+  els.appSubtitle.hidden = !customization.appSubtitle;
+  els.brandContext.textContent = customization.schoolName || "";
+  els.brandContext.hidden = !customization.schoolName;
+  const details = [customization.teacherName, customization.roomNumber].filter(Boolean).join(" - ");
+  els.brandDetails.textContent = details;
+  els.brandDetails.hidden = !details;
 }
 
 function isTeacherPasswordConfigured() {
@@ -892,6 +1027,28 @@ function saveSettings() {
   render();
 }
 
+function saveCustomization() {
+  state.settings.customization = normalizeCustomization({
+    teacherName: els.teacherNameInput.value,
+    roomNumber: els.roomNumberInput.value,
+    schoolName: els.schoolNameInput.value,
+    appTitle: els.appTitleInput.value,
+    appSubtitle: els.appSubtitleInput.value,
+    colorTheme: els.colorThemeInput.value,
+    studentNameDisplay: els.studentNameDisplayInput.value,
+    showStudentCurrentOut: els.showStudentCurrentOutInput.value === "true",
+    showHallPassCounts: els.showHallPassCountsInput.value === "true",
+    autoResetSeconds: els.autoResetSecondsInput.value,
+    yellowTimeWarningMinutes: els.yellowTimeWarningInput.value,
+    redTimeWarningMinutes: els.redTimeWarningInput.value,
+    lowHallPassWarningMessage: els.lowHallPassMessageInput.value,
+    lunchDetentionWarningMessage: els.lunchDetentionMessageInput.value
+  });
+  saveState();
+  render();
+  alert("Teacher customization saved.");
+}
+
 function saveSchoolYearSettings(showAlert = true) {
   const periods = state.settings.periods.map((period) => ({
     ...period,
@@ -947,6 +1104,7 @@ function renderStudentStation() {
       .map((student) => {
         const openLog = getOpenLog(student.id);
         const status = openLog ? `Signed out: ${getSignOutLabel(openLog)}` : "Ready";
+        const displayName = getStudentDisplayName(student);
         const classes = [
           "student-card",
           selectedStudentId === student.id ? "active" : "",
@@ -954,7 +1112,7 @@ function renderStudentStation() {
         ].join(" ");
         return `
           <button class="${classes}" data-select-student="${student.id}" type="button">
-            <strong>${escapeHtml(student.name)}</strong>
+            <strong>${escapeHtml(displayName)}</strong>
             <span>${escapeHtml(status)}</span>
           </button>
         `;
@@ -964,21 +1122,29 @@ function renderStudentStation() {
 
   renderStudentCurrentOutList();
   renderActionPanel();
+  updateSelectedStudentResetTimer();
 }
 
 function renderStudentCurrentOutList() {
+  const panel = document.querySelector(".student-current-panel");
+  if (panel) panel.hidden = !state.settings.customization.showStudentCurrentOut;
+  if (!state.settings.customization.showStudentCurrentOut) return;
   const openLogs = getOpenLogsForClass(activeClassId);
   els.studentOutCount.textContent = openLogs.length;
   els.studentCurrentOutList.innerHTML = openLogs.length
-    ? openLogs.map((log) => `
-        <div class="current-row kiosk-current-card">
+    ? openLogs.map((log) => {
+        const minutes = getOpenMinutes(log);
+        const warningLevel = getTimeWarningLevel(minutes);
+        return `
+        <div class="current-row kiosk-current-card ${warningLevel}">
           <div>
-            <strong>${escapeHtml(log.studentName)}</strong>
+            <strong>${escapeHtml(getStudentDisplayName(log.studentName))}</strong>
             <span>${escapeHtml(getSignOutLabel(log))} since ${formatDateTime(log.outAt)}</span>
           </div>
-          <span class="time-chip">${getOpenMinutes(log)} min</span>
+          <span class="time-chip ${warningLevel}">${minutes} min</span>
         </div>
-      `).join("")
+      `;
+      }).join("")
     : `<p class="no-data">No students are currently signed out.</p>`;
 }
 
@@ -1028,21 +1194,27 @@ function renderActionPanel() {
   const stats = getStudentPeriodStats(student.id, currentPeriod.id);
   const hallPassWarning = getHallPassWarningMessage(stats.hallPassesUsed, stats.hallPassLimit);
   const tardyWarning = getTardyStrikeMessage(stats.tardyStrikes, stats.lunchDetentionStrikes);
+  const displayName = getStudentDisplayName(student);
+  const hallPassProgressHtml = state.settings.customization.showHallPassCounts ? renderHallPassProgress(stats) : "";
+  const remainingHtml = state.settings.customization.showHallPassCounts ? `<div><span>Remaining</span><strong>${stats.hallPassesRemaining}</strong></div>` : "";
+  const hallPassWarningHtml = state.settings.customization.showHallPassCounts
+    ? renderWarningBox(hallPassWarning, stats.extraHallPasses > 0 || stats.hallPassesUsed >= stats.hallPassLimit ? "danger" : "warning")
+    : "";
   const summaryHtml = `
     <div class="student-summary">
-      ${renderHallPassProgress(stats)}
+      ${hallPassProgressHtml}
       <div class="summary-grid">
-        <div><span>Remaining</span><strong>${stats.hallPassesRemaining}</strong></div>
+        ${remainingHtml}
         <div><span>Tardy strikes</span><strong>${stats.tardyStrikes} / ${stats.lunchDetentionStrikes}</strong>${renderTardyDots(stats.tardyStrikes, stats.lunchDetentionStrikes)}</div>
       </div>
-      ${renderWarningBox(hallPassWarning, stats.extraHallPasses > 0 || stats.hallPassesUsed >= stats.hallPassLimit ? "danger" : "warning")}
+      ${hallPassWarningHtml}
       ${renderWarningBox(tardyWarning, stats.tardyStrikes >= stats.lunchDetentionStrikes ? "danger" : "warning")}
     </div>
   `;
   if (openLog) {
     els.actionPanel.innerHTML = `
       <p class="eyebrow">Step 2</p>
-      <h2 class="selected-name">${escapeHtml(student.name)}</h2>
+      <h2 class="selected-name">${escapeHtml(displayName)}</h2>
       <p class="muted">Currently signed out for ${escapeHtml(getSignOutLabel(openLog))} since ${formatDateTime(openLog.outAt)}.</p>
       ${summaryHtml}
       <div class="action-stack">
@@ -1054,7 +1226,7 @@ function renderActionPanel() {
 
   els.actionPanel.innerHTML = `
     <p class="eyebrow">Step 2</p>
-    <h2 class="selected-name">${escapeHtml(student.name)}</h2>
+    <h2 class="selected-name">${escapeHtml(displayName)}</h2>
     ${summaryHtml}
     <div class="action-stack">
       <button class="big-action restroom" data-action="restroom" type="button">Hall Pass: Restroom</button>
@@ -1151,16 +1323,20 @@ function renderTeacherDashboard() {
 
   els.outCount.textContent = openLogs.length;
   els.currentOutList.innerHTML = openLogs.length
-    ? openLogs.map((log) => `
-        <div class="current-row dashboard-current-card">
+    ? openLogs.map((log) => {
+        const minutes = getOpenMinutes(log);
+        const warningLevel = getTimeWarningLevel(minutes);
+        return `
+        <div class="current-row dashboard-current-card ${warningLevel}">
           <div>
             <strong>${escapeHtml(log.studentName)}</strong>
             <span>${escapeHtml(getSignOutLabel(log))} since ${formatDateTime(log.outAt)}${selectedClassId === "all" ? `, ${escapeHtml(getClass(log.classId)?.name || "Class")}` : ""}</span>
           </div>
-          <span class="time-chip">${getOpenMinutes(log)} min</span>
+          <span class="time-chip ${warningLevel}">${minutes} min</span>
           <button class="secondary" data-quick-sign-in="${log.studentId}" type="button">Sign In</button>
         </div>
-      `).join("")
+      `;
+      }).join("")
     : `<p class="no-data">No students are currently signed out.</p>`;
 
   renderLogTable();
@@ -1287,9 +1463,27 @@ function renderSetup() {
       <button class="danger" data-remove-classroom-option="${escapeHtml(option)}" type="button">Remove</button>
     </div>
   `).join("");
+
+  const customization = state.settings.customization;
+  els.teacherNameInput.value = customization.teacherName;
+  els.roomNumberInput.value = customization.roomNumber;
+  els.schoolNameInput.value = customization.schoolName;
+  els.appTitleInput.value = customization.appTitle;
+  els.appSubtitleInput.value = customization.appSubtitle;
+  els.colorThemeInput.value = customization.colorTheme;
+  els.studentNameDisplayInput.value = customization.studentNameDisplay;
+  els.showStudentCurrentOutInput.value = String(customization.showStudentCurrentOut);
+  els.showHallPassCountsInput.value = String(customization.showHallPassCounts);
+  els.autoResetSecondsInput.value = customization.autoResetSeconds;
+  els.yellowTimeWarningInput.value = customization.yellowTimeWarningMinutes;
+  els.redTimeWarningInput.value = customization.redTimeWarningMinutes;
+  els.lowHallPassMessageInput.value = customization.lowHallPassWarningMessage;
+  els.lunchDetentionMessageInput.value = customization.lunchDetentionWarningMessage;
 }
 
 function render() {
+  applyThemeSettings();
+  renderHeader();
   renderStudentStation();
   renderTeacherDashboard();
   renderSetup();
@@ -1549,12 +1743,27 @@ els.studentNameInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") addStudent();
 });
 els.saveSettingsBtn.addEventListener("click", saveSettings);
+els.saveCustomizationBtn.addEventListener("click", saveCustomization);
 els.saveClassRulesBtn.addEventListener("click", saveClassRules);
 els.saveSchoolYearBtn.addEventListener("click", () => saveSchoolYearSettings(true));
 els.thresholdInput.addEventListener("keydown", (event) => clickOnEnter(event, saveClassRules));
 els.lunchDetentionStrikesInput.addEventListener("keydown", (event) => clickOnEnter(event, saveClassRules));
 els.maxStudentsOutInput.addEventListener("keydown", (event) => clickOnEnter(event, saveClassRules));
 els.teacherPasswordInput.addEventListener("keydown", (event) => clickOnEnter(event, saveSettings));
+[
+  els.teacherNameInput,
+  els.roomNumberInput,
+  els.schoolNameInput,
+  els.appTitleInput,
+  els.appSubtitleInput,
+  els.colorThemeInput,
+  els.studentNameDisplayInput,
+  els.showStudentCurrentOutInput,
+  els.showHallPassCountsInput,
+  els.autoResetSecondsInput,
+  els.yellowTimeWarningInput,
+  els.redTimeWarningInput
+].forEach((input) => input.addEventListener("keydown", (event) => clickOnEnter(event, saveCustomization)));
 els.schoolYearInput.addEventListener("keydown", (event) => clickOnEnter(event, () => saveSchoolYearSettings(true)));
 els.ruleClassSelect.addEventListener("change", () => {
   activeRuleClassId = els.ruleClassSelect.value;

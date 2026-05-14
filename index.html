@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Classroom Sign-Out Tracker</title>
+    <title>HallPass</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -11,9 +11,11 @@
   </head>
   <body>
     <header class="app-header">
-      <div>
-        <p class="eyebrow">Classroom Tracker</p>
-        <h1>Sign-Out, Sign-In, and Tardy Log</h1>
+      <div class="brand-lockup">
+        <p class="brand-context" id="brandContext"></p>
+        <h1 id="appTitle">HallPass</h1>
+        <p id="appSubtitle">Student Sign-Out System</p>
+        <p class="brand-details" id="brandDetails"></p>
       </div>
     </header>
 
@@ -134,6 +136,7 @@
           <button class="setup-tab active" data-setup-tab="classes" type="button">Classes</button>
           <button class="setup-tab" data-setup-tab="students" type="button">Students & PINs</button>
           <button class="setup-tab" data-setup-tab="rules" type="button">Class Rules</button>
+          <button class="setup-tab" data-setup-tab="customization" type="button">Teacher Customization</button>
           <button class="setup-tab" data-setup-tab="year" type="button">School Year</button>
         </div>
 
@@ -251,6 +254,89 @@
           </div>
           <div class="period-editor" id="periodEditor"></div>
           <button id="saveSchoolYearBtn" type="button">Save School Year</button>
+        </section>
+
+        <section class="panel setup-section" data-setup-section="customization">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Personalize</p>
+              <h2>Teacher customization</h2>
+            </div>
+          </div>
+          <div class="field-grid">
+            <label>
+              Teacher name
+              <input id="teacherNameInput" type="text" placeholder="Example: Mr. Doudna">
+            </label>
+            <label>
+              Room number
+              <input id="roomNumberInput" type="text" placeholder="Example: Room 214">
+            </label>
+            <label>
+              School name
+              <input id="schoolNameInput" type="text" placeholder="Example: Buckeye Trail High School">
+            </label>
+            <label>
+              App title
+              <input id="appTitleInput" type="text" placeholder="HallPass">
+            </label>
+            <label>
+              Optional subtitle
+              <input id="appSubtitleInput" type="text" placeholder="Student Sign-Out System">
+            </label>
+            <label>
+              Color theme
+              <select id="colorThemeInput">
+                <option value="blue">Classic Blue</option>
+                <option value="green">Calm Green</option>
+                <option value="royal">Royal Blue</option>
+                <option value="slate">Modern Slate</option>
+              </select>
+            </label>
+            <label>
+              Student names on Student Station
+              <select id="studentNameDisplayInput">
+                <option value="full">Show full names</option>
+                <option value="first">Show first names only</option>
+              </select>
+            </label>
+            <label>
+              Currently signed out on Student Station
+              <select id="showStudentCurrentOutInput">
+                <option value="true">Show</option>
+                <option value="false">Hide</option>
+              </select>
+            </label>
+            <label>
+              Hall pass counts to students
+              <select id="showHallPassCountsInput">
+                <option value="true">Show</option>
+                <option value="false">Hide</option>
+              </select>
+            </label>
+            <label>
+              Auto-reset selected student after seconds
+              <input id="autoResetSecondsInput" min="0" type="number" placeholder="0 = off">
+            </label>
+            <label>
+              Yellow time warning after minutes out
+              <input id="yellowTimeWarningInput" min="0" type="number" placeholder="0 = off">
+            </label>
+            <label>
+              Red time warning after minutes out
+              <input id="redTimeWarningInput" min="0" type="number" placeholder="0 = off">
+            </label>
+            <label class="full-field">
+              Custom low hall pass warning message
+              <textarea id="lowHallPassMessageInput" rows="3" placeholder="Warning: You are low on hall passes."></textarea>
+            </label>
+            <label class="full-field">
+              Custom lunch detention warning message
+              <textarea id="lunchDetentionMessageInput" rows="3" placeholder="Lunch detention threshold reached."></textarea>
+            </label>
+          </div>
+          <p class="security-note">These settings only change how this classroom kiosk looks and what students can see.</p>
+          <button id="saveCustomizationBtn" type="button">Save Customization</button>
         </section>
       </section>
     </main>
