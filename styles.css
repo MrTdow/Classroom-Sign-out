@@ -681,6 +681,27 @@ dialog::backdrop {
   margin-top: 16px;
 }
 
+.pin-pad {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.pin-pad button {
+  border-radius: 16px;
+  font-size: 1.55rem;
+  font-weight: 900;
+  min-height: 64px;
+  padding: 14px;
+}
+
+.pin-pad .pin-pad-tool {
+  background: #eef2f7;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
 .no-data {
   color: var(--muted);
   padding: 12px 0;

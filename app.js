@@ -785,6 +785,31 @@ function requestStudentPin(studentId, actionLabel, onSuccess) {
   requestAnimationFrame(() => els.pinInput.focus());
 }
 
+function updatePinEntry(value) {
+  els.pinInput.value = value.replace(/\D/g, "").slice(0, 4);
+  els.pinError.textContent = "";
+}
+
+function pressPinPadKey(key) {
+  if (!els.pinDialog.open) return;
+  if (key === "clear") {
+    updatePinEntry("");
+    els.pinInput.focus();
+    return;
+  }
+  if (key === "backspace") {
+    updatePinEntry(els.pinInput.value.slice(0, -1));
+    els.pinInput.focus();
+    return;
+  }
+  if (!/^\d$/.test(key) || els.pinInput.value.length >= 4) return;
+  updatePinEntry(`${els.pinInput.value}${key}`);
+  els.pinInput.focus();
+  if (els.pinInput.value.length === 4) {
+    setTimeout(confirmStudentPin, 120);
+  }
+}
+
 function confirmStudentPin() {
   if (!pendingPinAction) return;
   const student = getStudent(pendingPinAction.studentId);
@@ -796,6 +821,7 @@ function confirmStudentPin() {
   if (els.pinInput.value !== student.pin) {
     els.pinError.textContent = "Incorrect PIN. Try again or ask your teacher.";
     els.pinInput.value = "";
+    els.pinInput.focus();
     return;
   }
   const action = pendingPinAction.onSuccess;
@@ -1684,6 +1710,12 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const pinPadButton = event.target.closest("[data-pin-key]");
+  if (pinPadButton && els.pinDialog.contains(pinPadButton)) {
+    pressPinPadKey(pinPadButton.dataset.pinKey);
+    return;
+  }
+
   const removeButton = event.target.closest("[data-remove-student]");
   if (removeButton) {
     removeStudent(removeButton.dataset.removeStudent);
@@ -1787,8 +1819,7 @@ els.pinDialog.querySelector("form").addEventListener("submit", (event) => {
   pendingPinAction = null;
 });
 els.pinInput.addEventListener("input", () => {
-  els.pinInput.value = els.pinInput.value.replace(/\D/g, "").slice(0, 4);
-  els.pinError.textContent = "";
+  updatePinEntry(els.pinInput.value);
 });
 els.pinInput.addEventListener("keydown", (event) => {
   submitDialogInputOnEnter(event, els.pinDialog, confirmStudentPin);
