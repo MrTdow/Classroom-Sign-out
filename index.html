@@ -406,7 +406,7 @@
       <form method="dialog">
         <h2>Enter PIN</h2>
         <p id="pinDialogText">Enter your 4-digit PIN.</p>
-        <input id="pinInput" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="4-digit PIN" autocomplete="off">
+        <input id="pinInput" type="password" inputmode="none" maxlength="4" pattern="[0-9]{4}" placeholder="4-digit PIN" autocomplete="off" readonly aria-readonly="true">
         <p class="dialog-error" id="pinError"></p>
         <div class="pin-pad" aria-label="PIN number pad">
           <button data-pin-key="1" type="button">1</button>

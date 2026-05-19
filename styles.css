@@ -681,6 +681,15 @@ dialog::backdrop {
   margin-top: 16px;
 }
 
+#pinInput {
+  caret-color: transparent;
+  cursor: default;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 0.25em;
+  text-align: center;
+}
+
 .pin-pad {
   display: grid;
   gap: 10px;

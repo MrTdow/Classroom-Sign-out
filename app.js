@@ -810,6 +810,25 @@ function pressPinPadKey(key) {
   }
 }
 
+function handlePinDialogKeydown(event) {
+  if (!els.pinDialog.open || event.shiftKey || event.ctrlKey || event.altKey) return;
+  if (event.target.closest("[data-pin-key]") && (event.key === "Enter" || event.key === " ")) return;
+  if (/^\d$/.test(event.key)) {
+    event.preventDefault();
+    pressPinPadKey(event.key);
+    return;
+  }
+  if (event.key === "Backspace" || event.key === "Delete") {
+    event.preventDefault();
+    pressPinPadKey("backspace");
+    return;
+  }
+  if (event.key === "Enter") {
+    event.preventDefault();
+    confirmStudentPin();
+  }
+}
+
 function confirmStudentPin() {
   if (!pendingPinAction) return;
   const student = getStudent(pendingPinAction.studentId);
@@ -1821,9 +1840,7 @@ els.pinDialog.querySelector("form").addEventListener("submit", (event) => {
 els.pinInput.addEventListener("input", () => {
   updatePinEntry(els.pinInput.value);
 });
-els.pinInput.addEventListener("keydown", (event) => {
-  submitDialogInputOnEnter(event, els.pinDialog, confirmStudentPin);
-});
+els.pinDialog.addEventListener("keydown", handlePinDialogKeydown);
 els.maxOutDialog.querySelector("form").addEventListener("submit", (event) => {
   if (!event.submitter || event.submitter.value === "approve") {
     event.preventDefault();
