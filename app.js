@@ -118,6 +118,7 @@ const els = {
   watchlist: document.getElementById("watchlist"),
   currentOutList: document.getElementById("currentOutList"),
   outCount: document.getElementById("outCount"),
+  logStudentSearch: document.getElementById("logStudentSearch"),
   logClassFilter: document.getElementById("logClassFilter"),
   logPeriodFilter: document.getElementById("logPeriodFilter"),
   logStudentFilter: document.getElementById("logStudentFilter"),
@@ -1447,11 +1448,13 @@ function renderLogTable() {
   const classId = els.logClassFilter.value || "all";
   const periodId = els.logPeriodFilter.value || "all";
   const studentId = els.logStudentFilter.value || "all";
+  const search = els.logStudentSearch.value.trim().toLowerCase();
   const logs = state.logs.filter((log) =>
     (type === "all" || log.type === type) &&
     (classId === "all" || log.classId === classId) &&
     (periodId === "all" || log.periodId === periodId) &&
-    (studentId === "all" || log.studentId === studentId)
+    (studentId === "all" || log.studentId === studentId) &&
+    (!search || log.studentName.toLowerCase().includes(search))
   );
 
   els.logTable.innerHTML = logs.length
@@ -1834,6 +1837,7 @@ document.addEventListener("keydown", (event) => {
 els.tabs.forEach((tab) => tab.addEventListener("click", () => switchView(tab.dataset.view)));
 els.dashboardClassFilter.addEventListener("change", renderTeacherDashboard);
 els.periodFilter.addEventListener("change", renderTeacherDashboard);
+els.logStudentSearch.addEventListener("input", renderLogTable);
 els.logClassFilter.addEventListener("change", renderTeacherDashboard);
 els.logPeriodFilter.addEventListener("change", renderLogTable);
 els.logStudentFilter.addEventListener("change", renderLogTable);
