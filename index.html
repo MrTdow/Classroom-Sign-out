@@ -435,6 +435,20 @@
         <p id="teacherPasswordDialogText">Enter the teacher password to continue.</p>
         <input id="teacherPasswordEntry" type="password" placeholder="Teacher password" autocomplete="off">
         <p class="dialog-error" id="teacherPasswordError"></p>
+        <div class="pin-pad" aria-label="Teacher password number pad">
+          <button data-teacher-key="1" type="button">1</button>
+          <button data-teacher-key="2" type="button">2</button>
+          <button data-teacher-key="3" type="button">3</button>
+          <button data-teacher-key="4" type="button">4</button>
+          <button data-teacher-key="5" type="button">5</button>
+          <button data-teacher-key="6" type="button">6</button>
+          <button data-teacher-key="7" type="button">7</button>
+          <button data-teacher-key="8" type="button">8</button>
+          <button data-teacher-key="9" type="button">9</button>
+          <button class="pin-pad-tool" data-teacher-key="clear" type="button">Clear</button>
+          <button data-teacher-key="0" type="button">0</button>
+          <button class="pin-pad-tool" data-teacher-key="backspace" type="button" aria-label="Backspace">⌫</button>
+        </div>
         <div class="dialog-actions">
           <button class="secondary" value="cancel" type="submit">Cancel</button>
           <button id="teacherPasswordSubmitBtn" value="confirm" type="submit">Unlock</button>

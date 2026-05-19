@@ -541,7 +541,7 @@ function switchView(viewName) {
     els.teacherPasswordEntry.placeholder = needsSetup ? "Create teacher password" : "Teacher password";
     els.teacherPasswordSubmitBtn.textContent = needsSetup ? "Save Password" : "Unlock";
     els.teacherPasswordDialog.showModal();
-    requestAnimationFrame(() => els.teacherPasswordEntry.focus());
+    requestAnimationFrame(() => els.teacherPasswordDialog.querySelector("[data-teacher-key]")?.focus());
     return;
   }
   showView(viewName);
@@ -587,6 +587,45 @@ function unlockTeacherView() {
   pendingTeacherView = null;
   els.teacherPasswordDialog.close("unlocked");
   showView(viewName);
+}
+
+function updateTeacherPasswordEntry(value) {
+  els.teacherPasswordEntry.value = value;
+  els.teacherPasswordError.textContent = "";
+}
+
+function pressTeacherPasswordKey(key) {
+  if (!els.teacherPasswordDialog.open) return;
+  if (key === "clear") {
+    updateTeacherPasswordEntry("");
+    return;
+  }
+  if (key === "backspace") {
+    updateTeacherPasswordEntry(els.teacherPasswordEntry.value.slice(0, -1));
+    return;
+  }
+  if (!/^\d$/.test(key)) return;
+  updateTeacherPasswordEntry(`${els.teacherPasswordEntry.value}${key}`);
+}
+
+function handleTeacherPasswordDialogKeydown(event) {
+  if (!els.teacherPasswordDialog.open || event.shiftKey || event.ctrlKey || event.altKey) return;
+  if (event.target === els.teacherPasswordEntry) return;
+  if (event.target.closest("[data-teacher-key]") && (event.key === "Enter" || event.key === " ")) return;
+  if (/^\d$/.test(event.key)) {
+    event.preventDefault();
+    pressTeacherPasswordKey(event.key);
+    return;
+  }
+  if (event.key === "Backspace" || event.key === "Delete") {
+    event.preventDefault();
+    pressTeacherPasswordKey("backspace");
+    return;
+  }
+  if (event.key === "Enter") {
+    event.preventDefault();
+    unlockTeacherView();
+  }
 }
 
 function ensureActiveClass() {
@@ -1735,6 +1774,12 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const teacherPadButton = event.target.closest("[data-teacher-key]");
+  if (teacherPadButton && els.teacherPasswordDialog.contains(teacherPadButton)) {
+    pressTeacherPasswordKey(teacherPadButton.dataset.teacherKey);
+    return;
+  }
+
   const removeButton = event.target.closest("[data-remove-student]");
   if (removeButton) {
     removeStudent(removeButton.dataset.removeStudent);
@@ -1870,6 +1915,7 @@ els.teacherPasswordEntry.addEventListener("input", () => {
 els.teacherPasswordEntry.addEventListener("keydown", (event) => {
   submitDialogInputOnEnter(event, els.teacherPasswordDialog, unlockTeacherView);
 });
+els.teacherPasswordDialog.addEventListener("keydown", handleTeacherPasswordDialogKeydown);
 els.hallPassLimitDialog.addEventListener("close", () => {
   if (!pendingHallPassLimit) return;
   const { action, studentId } = pendingHallPassLimit;
