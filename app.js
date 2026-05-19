@@ -119,6 +119,8 @@ const els = {
   currentOutList: document.getElementById("currentOutList"),
   outCount: document.getElementById("outCount"),
   logClassFilter: document.getElementById("logClassFilter"),
+  logPeriodFilter: document.getElementById("logPeriodFilter"),
+  logStudentFilter: document.getElementById("logStudentFilter"),
   typeFilter: document.getElementById("typeFilter"),
   logTable: document.getElementById("logTable"),
   downloadCsvBtn: document.getElementById("downloadCsvBtn"),
@@ -1327,6 +1329,11 @@ function renderTeacherDashboard() {
   const filterClassIds = new Set(["all", ...state.classes.map((classItem) => classItem.id)]);
   const selectedClassId = filterClassIds.has(els.dashboardClassFilter.value) ? els.dashboardClassFilter.value : "all";
   const selectedLogClassId = filterClassIds.has(els.logClassFilter.value) ? els.logClassFilter.value : "all";
+  const periodIds = new Set(["all", ...state.settings.periods.map((periodItem) => periodItem.id)]);
+  const selectedLogPeriodId = periodIds.has(els.logPeriodFilter.value) ? els.logPeriodFilter.value : "all";
+  const logStudentOptions = state.students.filter((student) => selectedLogClassId === "all" || student.classId === selectedLogClassId);
+  const studentIds = new Set(["all", ...logStudentOptions.map((student) => student.id)]);
+  const selectedLogStudentId = studentIds.has(els.logStudentFilter.value) ? els.logStudentFilter.value : "all";
 
   const classOptions = [
     `<option value="all">All classes</option>`,
@@ -1337,10 +1344,19 @@ function renderTeacherDashboard() {
   els.dashboardClassFilter.value = selectedClassId;
   els.logClassFilter.value = selectedLogClassId;
 
-  els.periodFilter.innerHTML = state.settings.periods
+  const periodOptions = state.settings.periods
     .map((period) => `<option value="${period.id}">${period.name}</option>`)
     .join("");
+  els.periodFilter.innerHTML = periodOptions;
   els.periodFilter.value = selectedPeriodId;
+  els.logPeriodFilter.innerHTML = `<option value="all">All 9 weeks</option>${periodOptions}`;
+  els.logPeriodFilter.value = selectedLogPeriodId;
+
+  els.logStudentFilter.innerHTML = [
+    `<option value="all">All students</option>`,
+    ...logStudentOptions.map((student) => `<option value="${student.id}">${escapeHtml(student.name)}</option>`)
+  ].join("");
+  els.logStudentFilter.value = selectedLogStudentId;
 
   const period = getPeriodById(selectedPeriodId) || currentPeriod;
   const dashboardStudents = state.students.filter((student) => selectedClassId === "all" || student.classId === selectedClassId);
@@ -1429,7 +1445,14 @@ function renderTeacherDashboard() {
 function renderLogTable() {
   const type = els.typeFilter.value || "all";
   const classId = els.logClassFilter.value || "all";
-  const logs = state.logs.filter((log) => (type === "all" || log.type === type) && (classId === "all" || log.classId === classId));
+  const periodId = els.logPeriodFilter.value || "all";
+  const studentId = els.logStudentFilter.value || "all";
+  const logs = state.logs.filter((log) =>
+    (type === "all" || log.type === type) &&
+    (classId === "all" || log.classId === classId) &&
+    (periodId === "all" || log.periodId === periodId) &&
+    (studentId === "all" || log.studentId === studentId)
+  );
 
   els.logTable.innerHTML = logs.length
     ? logs.map((log) => {
@@ -1455,7 +1478,7 @@ function renderLogTable() {
           </tr>
         `;
       }).join("")
-    : `<tr><td colspan="10">No entries yet.</td></tr>`;
+    : `<tr><td colspan="10">No entries match those filters.</td></tr>`;
 }
 
 function renderSetup() {
@@ -1811,7 +1834,9 @@ document.addEventListener("keydown", (event) => {
 els.tabs.forEach((tab) => tab.addEventListener("click", () => switchView(tab.dataset.view)));
 els.dashboardClassFilter.addEventListener("change", renderTeacherDashboard);
 els.periodFilter.addEventListener("change", renderTeacherDashboard);
-els.logClassFilter.addEventListener("change", renderLogTable);
+els.logClassFilter.addEventListener("change", renderTeacherDashboard);
+els.logPeriodFilter.addEventListener("change", renderLogTable);
+els.logStudentFilter.addEventListener("change", renderLogTable);
 els.typeFilter.addEventListener("change", renderLogTable);
 els.downloadCsvBtn.addEventListener("click", exportCsv);
 els.backupBtn.addEventListener("click", exportBackup);
