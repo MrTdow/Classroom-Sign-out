@@ -144,6 +144,7 @@ const els = {
   periodEditor: document.getElementById("periodEditor"),
   saveSettingsBtn: document.getElementById("saveSettingsBtn"),
   saveClassRulesBtn: document.getElementById("saveClassRulesBtn"),
+  applyRulesAllBtn: document.getElementById("applyRulesAllBtn"),
   saveSchoolYearBtn: document.getElementById("saveSchoolYearBtn"),
   classroomOptionInput: document.getElementById("classroomOptionInput"),
   addClassroomOptionBtn: document.getElementById("addClassroomOptionBtn"),
@@ -1157,15 +1158,33 @@ function saveClassRules() {
   const classId = els.ruleClassSelect.value || activeRuleClassId || activeClassId;
   const classItem = getClass(classId);
   if (!classItem) return;
-  classItem.rules = normalizeClassRules({
-    hallPassLimit: els.thresholdInput.value,
-    lunchDetentionStrikes: els.lunchDetentionStrikesInput.value,
-    maxStudentsOut: els.maxStudentsOutInput.value
-  });
+  const rules = getRulesFromInputs();
+  classItem.rules = rules;
   activeRuleClassId = classId;
   saveState();
   render();
   alert(`Rules saved for ${classItem.name}.`);
+}
+
+function getRulesFromInputs() {
+  return normalizeClassRules({
+    hallPassLimit: els.thresholdInput.value,
+    lunchDetentionStrikes: els.lunchDetentionStrikesInput.value,
+    maxStudentsOut: els.maxStudentsOutInput.value
+  });
+}
+
+function applyRulesToAllClasses() {
+  const rules = getRulesFromInputs();
+  const message = `Apply these rules to all ${state.classes.length} classes?\n\nHall passes: ${rules.hallPassLimit > 0 ? rules.hallPassLimit : "No limit"}\nTardy strikes before detention: ${rules.lunchDetentionStrikes}\nMax students out: ${rules.maxStudentsOut > 0 ? rules.maxStudentsOut : "No limit"}`;
+  if (!confirm(message)) return;
+  state.classes = state.classes.map((classItem) => ({
+    ...classItem,
+    rules: clone(rules)
+  }));
+  saveState();
+  render();
+  alert("Class rules applied to all classes.");
 }
 
 function renderStudentStation() {
@@ -1870,6 +1889,7 @@ els.studentNameInput.addEventListener("keydown", (event) => {
 els.saveSettingsBtn.addEventListener("click", saveSettings);
 els.saveCustomizationBtn.addEventListener("click", saveCustomization);
 els.saveClassRulesBtn.addEventListener("click", saveClassRules);
+els.applyRulesAllBtn.addEventListener("click", applyRulesToAllClasses);
 els.saveSchoolYearBtn.addEventListener("click", () => saveSchoolYearSettings(true));
 els.thresholdInput.addEventListener("keydown", (event) => clickOnEnter(event, saveClassRules));
 els.lunchDetentionStrikesInput.addEventListener("keydown", (event) => clickOnEnter(event, saveClassRules));
